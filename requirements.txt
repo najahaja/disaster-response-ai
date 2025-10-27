@@ -1,7 +1,9 @@
-pettingzoo[classic]==1.24.0
-pygame==2.5.0
-numpy==1.24.0
-gymnasium==0.29.0
-pyyaml==6.0
-matplotlib==3.7.0
-streamlit==1.28.0
+pettingzoo[classic]>=1.24.0
+pygame>=2.5.0
+numpy>=1.24.0
+gymnasium>=0.29.0
+pyyaml>=6.0
+matplotlib>=3.7.0
+streamlit>=1.28.0
+setuptools>=65.5.0
+wheel>=0.40.0
