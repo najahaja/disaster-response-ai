@@ -255,7 +255,16 @@ class TrainingManager:
                             action = np.random.choice(['UP', 'DOWN', 'LEFT', 'RIGHT', 'STAY'])
                             actions[agent_id] = action
                         
-                        observation, rewards, done, info = self.env.step(actions)
+                        # ✅ FIXED: Handle both gymnasium and legacy step formats
+                        result = self.env.step(actions)
+                        if len(result) == 5:
+                            # Gymnasium format: obs, reward, terminated, truncated, info
+                            observation, reward, terminated, truncated, info = result
+                            rewards = reward  # Convert to single reward
+                            done = terminated or truncated
+                        else:
+                            # Legacy format: obs, rewards, done, info
+                            observation, rewards, done, info = result
                         episode_reward += sum(rewards.values())
                     
                     if done:
