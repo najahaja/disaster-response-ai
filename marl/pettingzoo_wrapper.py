@@ -1,6 +1,6 @@
 import pettingzoo
 from pettingzoo import AECEnv
-from pettingzoo.utils import agent_selector  # ✅ FIXED IMPORT
+from pettingzoo.utils.agent_selector import AgentSelector  # ✅ FIXED IMPORT
 from gymnasium import spaces
 import numpy as np
 import pygame
@@ -66,8 +66,8 @@ class DisasterResponseEnv(AECEnv):
         self.possible_agents = list(self.env.agents.keys())
         self.agents = self.possible_agents[:]
         
-        # ✅ FIXED: Use correct agent_selector import
-        self._agent_selector = agent_selector(self.agents)
+        # ✅ FIXED: Use AgentSelector correctly
+        self._agent_selector = AgentSelector(self.agents)
         self.agent_selection = self._agent_selector.next()
         
         # Initialize state dictionaries

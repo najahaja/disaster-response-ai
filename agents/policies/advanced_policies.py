@@ -172,10 +172,15 @@ class CommunicativeAgentMixin:
         self.received_messages = []
         self.known_civilians = []  # Shared knowledge
         self.known_blockages = []  # Shared knowledge
+        self.agent_ref = None  # Reference to the actual agent object
     
     def set_communication_system(self, comm_system):
         """Set the communication system"""
         self.communication_system = comm_system
+    
+    def set_agent_reference(self, agent):
+        """Set reference to the actual agent object"""
+        self.agent_ref = agent
     
     def process_messages(self):
         """Process received messages"""
@@ -213,23 +218,23 @@ class CommunicativeAgentMixin:
     
     def send_civilian_location(self, position, environment):
         """Broadcast civilian location"""
-        if self.communication_system:
+        if self.communication_system and self.agent_ref:
             self.communication_system.broadcast_message(
-                self, 'CIVILIAN_LOCATION', {'position': position}, environment
+                self.agent_ref, 'CIVILIAN_LOCATION', {'position': position}, environment
             )
     
     def send_road_blockage(self, position, environment):
         """Broadcast road blockage"""
-        if self.communication_system:
+        if self.communication_system and self.agent_ref:
             self.communication_system.broadcast_message(
-                self, 'ROAD_BLOCKED', {'position': position}, environment
+                self.agent_ref, 'ROAD_BLOCKED', {'position': position}, environment
             )
     
     def send_resource_request(self, resource_type, environment):
         """Broadcast resource request"""
-        if self.communication_system:
+        if self.communication_system and self.agent_ref:
             self.communication_system.broadcast_message(
-                self, 'RESOURCE_REQUEST', {'resource_type': resource_type}, environment
+                self.agent_ref, 'RESOURCE_REQUEST', {'resource_type': resource_type}, environment
             )
 
 class CooperativePolicy(CommunicativeAgentMixin):
@@ -249,9 +254,20 @@ class CooperativePolicy(CommunicativeAgentMixin):
             'explored_areas': set()
         }
         self.last_action = 'STAY'
+        self.agent_id = None  # Will be set when used with an agent
+    
+    def set_agent_id(self, agent_id):
+        """Set the agent ID for this policy"""
+        self.agent_id = agent_id
     
     def get_action(self, agent, environment):
         """Get cooperative action for agent"""
+        # Set agent ID and reference if not set
+        if self.agent_id is None:
+            self.agent_id = agent.agent_id
+        if self.agent_ref is None:
+            self.set_agent_reference(agent)
+            
         self.process_messages()  # Process any received messages
         
         # Update team knowledge
@@ -429,19 +445,63 @@ class CooperativePolicy(CommunicativeAgentMixin):
                 if civ_pos not in self.team_knowledge['civilian_locations']:
                     self.team_knowledge['civilian_locations'].append(civ_pos)
         
-        # Update blocked roads
+        # Update blocked roads - but only send message if we have the agent reference
         blocked_positions = np.argwhere(environment.grid == environment.cell_types['BLOCKED'])
         for pos in blocked_positions:
             pos_list = pos.tolist()
             if pos_list not in self.team_knowledge['blocked_roads']:
                 self.team_knowledge['blocked_roads'].append(pos_list)
-                self.send_road_blockage(pos_list, environment)
+                # Only send blockage message if we have communication system and agent reference
+                if self.communication_system and self.agent_ref:
+                    self.send_road_blockage(pos_list, environment)
     
     def get_policy_stats(self):
         """Get statistics about the policy's performance"""
         return {
+            'agent_id': self.agent_id,
             'known_civilians': len(self.team_knowledge['civilian_locations']),
             'known_blockages': len(self.team_knowledge['blocked_roads']),
             'explored_areas': len(self.team_knowledge['explored_areas']),
-            'messages_processed': len(self.received_messages)
+            'messages_processed': len(self.received_messages),
+            'assigned_targets': len(self.assigned_targets),
+            'has_agent_ref': self.agent_ref is not None,
+            'has_comm_system': self.communication_system is not None
         }
+
+# Simple alternative policies for testing
+class RandomPolicy:
+    """Simple random movement policy for testing"""
+    
+    def get_action(self, agent, environment):
+        """Get random action"""
+        possible_actions = ['UP', 'DOWN', 'LEFT', 'RIGHT', 'STAY']
+        valid_actions = [a for a in possible_actions if a == 'STAY' or 
+                        agent._is_valid_move(agent._calculate_new_position(a), environment.grid)]
+        return np.random.choice(valid_actions) if valid_actions else 'STAY'
+
+class ExplorePolicy:
+    """Simple exploration policy"""
+    
+    def __init__(self):
+        self.visited_positions = set()
+    
+    def get_action(self, agent, environment):
+        """Get exploration action"""
+        self.visited_positions.add(tuple(agent.position))
+        
+        possible_actions = ['UP', 'DOWN', 'LEFT', 'RIGHT']
+        unexplored_actions = []
+        
+        for action in possible_actions:
+            new_pos = agent._calculate_new_position(action)
+            if (agent._is_valid_move(new_pos, environment.grid) and
+                tuple(new_pos) not in self.visited_positions):
+                unexplored_actions.append(action)
+        
+        if unexplored_actions:
+            return np.random.choice(unexplored_actions)
+        
+        # If all explored, move randomly
+        valid_actions = [a for a in possible_actions if 
+                        agent._is_valid_move(agent._calculate_new_position(a), environment.grid)]
+        return np.random.choice(valid_actions) if valid_actions else 'STAY'

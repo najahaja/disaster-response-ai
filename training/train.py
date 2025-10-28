@@ -87,33 +87,50 @@ class TrainingManager:
         
         print("🚀 Starting training with Stable-Baselines3...")
         
-        # For multi-agent with SB3, we need to use a wrapper
-        # This is a simplified approach - in practice, you'd need a multi-agent wrapper
-        
         try:
+            # Use the basic environment which now inherits from gym.Env
+            if not self.pettingzoo_available:
+                # Add some agents for the training
+                from agents.drone_agent import DroneAgent
+                drone = DroneAgent("training_drone", [5, 5], self.env.config)
+                self.env.add_agent(drone)
+                self.env.trigger_disaster()
+            
+            # Check if environment is gym-compatible
+            from gymnasium import Env
+            if isinstance(self.env, Env):
+                print("✅ Environment is gymnasium-compatible")
+            else:
+                print("❌ Environment is not gymnasium-compatible")
+                return
+            
             # Create a single-agent wrapper for demonstration
             from stable_baselines3.common.env_checker import check_env
-            check_env(self.env)
+            try:
+                check_env(self.env)
+                print("✅ Environment passed gymnasium check")
+            except Exception as e:
+                print(f"⚠️  Environment check warning: {e}")
             
             # Initialize PPO model
             self.model = PPO(
                 "MlpPolicy",
                 self.env,
                 learning_rate=self.config['training']['learning_rate'],
-                n_steps=self.config['training']['n_steps'],
-                batch_size=self.config['training']['batch_size'],
-                n_epochs=self.config['training']['n_epochs'],
+                n_steps=2048,  # Reduced for testing
+                batch_size=64,
+                n_epochs=10,
                 gamma=self.config['training']['gamma'],
                 gae_lambda=self.config['training']['gae_lambda'],
                 clip_range=self.config['training']['clip_range'],
                 verbose=1,
-                tensorboard_log=self.config['logging']['tensorboard_log']
+                tensorboard_log="./logs/tensorboard/"
             )
             
             # Train the model
             callback = TrainingCallback()
             self.model.learn(
-                total_timesteps=self.config['training']['total_timesteps'],
+                total_timesteps=10000,  # Reduced for testing
                 callback=callback
             )
             
@@ -125,10 +142,24 @@ class TrainingManager:
             
         except Exception as e:
             print(f"❌ Training failed: {e}")
+            import traceback
+            traceback.print_exc()
     
     def train_custom(self, num_episodes=1000):
         """Custom training loop for multi-agent RL"""
         print("🚀 Starting custom multi-agent training...")
+        
+        # Add agents if not already present
+        if not self.env.agents:
+            from agents.drone_agent import DroneAgent
+            from agents.ambulance_agent import AmbulanceAgent
+            
+            drone = DroneAgent("custom_drone", [5, 5], self.env.config)
+            ambulance = AmbulanceAgent("custom_ambulance", [10, 10], self.env.config)
+            
+            self.env.add_agent(drone)
+            self.env.add_agent(ambulance)
+            self.env.trigger_disaster()
         
         # Simple training implementation for demonstration
         for episode in range(num_episodes):
@@ -153,7 +184,7 @@ class TrainingManager:
                     steps += 1
             else:
                 # Basic environment
-                while not self.env.is_done():
+                while not self.env.is_done() and steps < 100:
                     # Simple random policy for demonstration
                     actions = {}
                     for agent_id in self.env.agents:
@@ -213,14 +244,19 @@ class TrainingManager:
             else:
                 # Basic environment evaluation
                 while not self.env.is_done():
-                    # For basic env, use random actions for now
-                    actions = {}
-                    for agent_id in self.env.agents:
-                        action = np.random.choice(['UP', 'DOWN', 'LEFT', 'RIGHT', 'STAY'])
-                        actions[agent_id] = action
-                    
-                    observation, rewards, done, info = self.env.step(actions)
-                    episode_reward += sum(rewards.values())
+                    if SB3_AVAILABLE and isinstance(self.model, (PPO, DQN, A2C)):
+                        action, _ = self.model.predict(observation, deterministic=True)
+                        observation, reward, done, info = self.env.step(action)
+                        episode_reward += reward
+                    else:
+                        # For basic env without model, use random actions
+                        actions = {}
+                        for agent_id in self.env.agents:
+                            action = np.random.choice(['UP', 'DOWN', 'LEFT', 'RIGHT', 'STAY'])
+                            actions[agent_id] = action
+                        
+                        observation, rewards, done, info = self.env.step(actions)
+                        episode_reward += sum(rewards.values())
                     
                     if done:
                         break
@@ -244,10 +280,17 @@ class TrainingManager:
     
     def visualize_training(self):
         """Visualize training results"""
-        self.visualizer.plot_training_curves(self.training_data)
+        if any(len(data) > 0 for data in self.training_data.values()):
+            self.visualizer.plot_training_curves(self.training_data)
+        else:
+            print("📊 No training data to visualize yet")
     
     def save_model(self, model_name):
         """Save the trained model"""
+        if self.model is None:
+            print("❌ No model to save")
+            return
+            
         from .utils.model_loader import ModelLoader
         
         loader = ModelLoader()

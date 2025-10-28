@@ -247,7 +247,7 @@ def test_integration():
         drone_policy = CooperativePolicy(env.config)
         ambulance_policy = CooperativePolicy(env.config)
         
-        # Set agent IDs for policies
+        # Set agent IDs and references for policies
         drone_policy.set_agent_id("integrated_drone")
         ambulance_policy.set_agent_id("integrated_ambulance")
         
@@ -274,7 +274,17 @@ def test_integration():
                     action = ambulance_policy.get_action(agent, env)
                 actions[agent_id] = action
             
-            observation, rewards, done, info = env.step(actions)
+            # ✅ FIXED: Handle gymnasium format (5 return values)
+            result = env.step(actions)
+            if len(result) == 5:
+                # Gymnasium format: obs, reward, terminated, truncated, info
+                observation, reward, terminated, truncated, info = result
+                rewards = reward  # In gym format, it's a single reward
+                done = terminated or truncated
+            else:
+                # Old format: obs, rewards, done, info
+                observation, rewards, done, info = result
+            
             print(f"✅ Step {step}: Rewards {rewards}")
             
             # Test communication on step 2
@@ -294,6 +304,8 @@ def test_integration():
         ambulance_stats = ambulance_policy.get_policy_stats()
         print(f"✅ Drone policy: {drone_stats['known_civilians']} civilians known")
         print(f"✅ Ambulance policy: {ambulance_stats['known_civilians']} civilians known")
+        print(f"✅ Drone has agent ref: {drone_stats['has_agent_ref']}")
+        print(f"✅ Ambulance has agent ref: {ambulance_stats['has_agent_ref']}")
         
         env.close()
         print("✅ Integrated system test completed successfully!")
@@ -304,7 +316,7 @@ def test_integration():
         import traceback
         traceback.print_exc()
         return False
-        
+
 def run_all_tests():
     """Run all tests and provide summary"""
     print("🚀 COMPLETE SYSTEM TEST - Disaster Response AI")
