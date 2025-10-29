@@ -1,6 +1,15 @@
-# PPO-specific configuration
+# PPO-specific configuration for Disaster Response AI
+
+algorithm: "PPO"
+
+# Network architecture
+policy:
+  network_architecture: "MlpPolicy" # Options: MlpPolicy, CnnPolicy, MultiInputPolicy
+  hidden_layers: [256, 256]
+  activation_fn: "tanh" # Options: tanh, relu
+
+# PPO hyperparameters
 ppo:
-  learning_rate: 0.0003
   n_steps: 2048
   batch_size: 64
   n_epochs: 10
@@ -16,17 +25,26 @@ ppo:
   sde_sample_freq: -1
   target_kl: null
 
+# Optimization
+optimization:
+  learning_rate: 0.0003
+  lr_schedule: "constant" # Options: constant, linear, cosine
+  adam_epsilon: 1e-5
+
+# Multi-agent specific
 multi_agent:
-  policies:
-    drone_policy:
-      observation_space: "global"
-      action_space: "discrete"
-      architecture: [64, 64]
-    ambulance_policy:
-      observation_space: "global" 
-      action_space: "discrete"
-      architecture: [128, 128]
-    rescue_policy:
-      observation_space: "global"
-      action_space: "discrete"
-      architecture: [64, 64]
+  centralized_critic: true
+  parameter_sharing: true
+  agent_id_mask: true
+
+# Environment wrapper
+env_wrapper:
+  frame_stack: 1
+  channel_first: true
+  normalize_observations: true
+
+# Experimental features
+experimental:
+  use_attention: false
+  use_curiosity: false
+  use_prioritized_replay: false

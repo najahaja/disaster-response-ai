@@ -1,38 +1,53 @@
+# Base configuration for Disaster Response AI Training - Week 4
+
+environment:
+  type: "simple_grid" # Options: simple_grid, real_map
+  grid_size: 20
+  num_civilians: 15
+  num_disasters: 5
+  max_steps: 1000
+  render_mode: null # Options: null, human, rgb_array
+
 training:
-  algorithm: "PPO"
+  algorithm: "PPO" # Options: PPO, A2C, DQN, Custom
   total_timesteps: 100000
   learning_rate: 0.0003
   gamma: 0.99
-  gae_lambda: 0.95
-  clip_range: 0.2
-  entropy_coef: 0.01
-  value_coef: 0.5
-  max_grad_norm: 0.5
   batch_size: 64
   n_epochs: 10
-  n_steps: 1024
+  epsilon_start: 1.0
+  epsilon_end: 0.01
+  epsilon_decay: 0.995
 
-environment:
-  name: "disaster_response"
-  max_steps: 1000
-  num_episodes: 1000
+agents:
+  num_drones: 2
+  num_ambulances: 2
+  num_rescue_teams: 1
+  observation_range: 5
+  communication_range: 10
 
-multi_agent:
-  policy_mapping:
-    drone: "drone_policy"
-    ambulance: "ambulance_policy" 
-    rescue_team: "rescue_policy"
-  shared_observations: true
-  shared_rewards: false
+rewards:
+  civilian_rescued: 100
+  civilian_injured: -50
+  disaster_contained: 80
+  step_penalty: -0.1
+  collaboration_bonus: 20
+  efficiency_bonus: 10
+
+marl:
+  use_centralized_critic: true
+  use_parameter_sharing: true
+  training_frequency: 100
+  evaluation_frequency: 1000
 
 logging:
-  log_interval: 10
-  save_interval: 100
-  eval_interval: 50
   tensorboard_log: "./logs/tensorboard/"
-  checkpoint_dir: "./checkpoints/"
+  model_save_path: "./models/"
+  evaluation_save_path: "./evaluations/"
+  log_interval: 100
 
-evaluation:
-  eval_episodes: 10
-  eval_freq: 100
-  deterministic: true
+advanced:
+  use_attention: false
+  use_communication: true
+  use_hierarchical: false
+  curriculum_learning: false

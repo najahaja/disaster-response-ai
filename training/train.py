@@ -1,323 +1,502 @@
+"""
+Training script for Disaster Response AI - Week 4
+Main training orchestration with support for multiple ML frameworks
+"""
 import os
+import sys
 import yaml
 import numpy as np
-from typing import Dict, List, Optional
-import pygame
+from datetime import datetime
+import matplotlib.pyplot as plt
+import warnings
+warnings.filterwarnings('ignore')
 
-# Try to import RL frameworks
+# Add project root to path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 try:
-    from stable_baselines3 import PPO, DQN, A2C
+    import gymnasium as gym
+    GYMNASIUM_AVAILABLE = True
+except ImportError:
+    GYMNASIUM_AVAILABLE = False
+    print("⚠️  Gymnasium not available")
+
+try:
+    from stable_baselines3 import PPO, A2C, DQN
+    from stable_baselines3.common.vec_env import DummyVecEnv
     from stable_baselines3.common.callbacks import BaseCallback
-    from stable_baselines3.common.monitor import Monitor
-    from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
     SB3_AVAILABLE = True
 except ImportError:
     SB3_AVAILABLE = False
-    print("⚠️  Stable-Baselines3 not available. Using custom training loop.")
+    print("⚠️  Stable-Baselines3 not available")
 
 try:
     import ray
     from ray import tune
     from ray.rllib.algorithms.ppo import PPO as RllibPPO
+    from ray.rllib.algorithms.a2c import A2C as RllibA2C
     RAY_AVAILABLE = True
 except ImportError:
     RAY_AVAILABLE = False
-    print("⚠️  Ray/RLlib not available.")
+    print("⚠️  Ray/RLlib not available")
 
 from environments.simple_grid_env import SimpleGridEnv
-from .utils.training_visualizer import TrainingVisualizer
+from marl.pettingzoo_wrapper import DisasterResponsePettingZoo
+from training.utils.model_loader import ModelLoader
 
-class TrainingCallback(BaseCallback):
-    """Custom callback for training monitoring"""
+class TrainingMetricsCallback(BaseCallback):
+    """Custom callback for tracking training metrics"""
     
     def __init__(self, verbose=0):
-        super().__init__(verbose)
+        super(TrainingMetricsCallback, self).__init__(verbose)
         self.episode_rewards = []
         self.episode_lengths = []
-        self.rescue_rates = []
-    
+        self.current_episode_reward = 0
+        self.current_episode_length = 0
+        
     def _on_step(self) -> bool:
+        # Get reward from environment
+        reward = self.locals.get('rewards', [0])[0] if 'rewards' in self.locals else 0
+        
+        self.current_episode_reward += reward
+        self.current_episode_length += 1
+        
+        # Check if episode is done
+        done = self.locals.get('dones', [False])[0] if 'dones' in self.locals else False
+        
+        if done:
+            self.episode_rewards.append(self.current_episode_reward)
+            self.episode_lengths.append(self.current_episode_length)
+            self.current_episode_reward = 0
+            self.current_episode_length = 0
+            
+            # Log every 10 episodes
+            if len(self.episode_rewards) % 10 == 0:
+                avg_reward = np.mean(self.episode_rewards[-10:])
+                avg_length = np.mean(self.episode_lengths[-10:])
+                print(f"Episode {len(self.episode_rewards)} - Avg Reward: {avg_reward:.2f}, Avg Length: {avg_length:.2f}")
+        
         return True
-    
-    def _on_rollout_end(self) -> None:
-        # Log training metrics
-        if len(self.model.ep_info_buffer) > 0:
-            ep_info = self.model.ep_info_buffer[-1]
-            self.episode_rewards.append(ep_info['r'])
-            self.episode_lengths.append(ep_info['l'])
 
-class TrainingManager:
-    """
-    Main training manager for the disaster response environment
-    """
+class DisasterResponseTrainer:
+    """Main training class for Disaster Response AI"""
     
     def __init__(self, config_path="training/configs/base_config.yaml"):
-        with open(config_path, 'r') as f:
-            self.config = yaml.safe_load(f)
-        
-        # Initialize environment - but handle potential PettingZoo issues
-        try:
-            from marl.pettingzoo_wrapper import DisasterResponseEnv
-            self.env = DisasterResponseEnv()
-            self.pettingzoo_available = True
-            print("✅ Using PettingZoo environment")
-        except Exception as e:
-            print(f"⚠️  PettingZoo wrapper not available: {e}")
-            print("🔄 Falling back to basic environment...")
-            from environments.simple_grid_env import SimpleGridEnv
-            self.env = SimpleGridEnv()
-            self.pettingzoo_available = False
-        
-        self.visualizer = TrainingVisualizer()
-        
-        # Training state
+        self.config = self.load_config(config_path)
         self.model = None
-        self.training_data = {
+        self.env = None
+        self.metrics = {
             'episode_rewards': [],
             'episode_lengths': [],
-            'rescue_rates': [],
-            'collaboration_scores': []
+            'training_time': 0,
+            'success_rate': 0
         }
+        
+    def load_config(self, config_path):
+        """Load training configuration"""
+        try:
+            with open(config_path, 'r') as file:
+                return yaml.safe_load(file)
+        except FileNotFoundError:
+            print(f"⚠️  Config file {config_path} not found, using defaults")
+            return self.get_default_config()
+    
+    def get_default_config(self):
+        """Get default training configuration"""
+        return {
+            'environment': {
+                'type': 'simple_grid',
+                'grid_size': 20,
+                'num_civilians': 10,
+                'num_disasters': 3,
+                'max_steps': 1000
+            },
+            'training': {
+                'algorithm': 'PPO',
+                'total_timesteps': 100000,
+                'learning_rate': 0.0003,
+                'gamma': 0.99,
+                'batch_size': 64,
+                'n_epochs': 10
+            },
+            'agents': {
+                'num_drones': 2,
+                'num_ambulances': 2,
+                'num_rescue_teams': 1
+            }
+        }
+    
+    def create_environment(self, render_mode=None):
+        """Create training environment"""
+        env_config = self.config['environment']
+        
+        if env_config['type'] == 'simple_grid':
+            env = SimpleGridEnv(
+                grid_size=env_config['grid_size'],
+                num_civilians=env_config['num_civilians'],
+                num_disasters=env_config['num_disasters'],
+                max_steps=env_config['max_steps'],
+                render_mode=render_mode
+            )
+            
+            # Try to wrap with PettingZoo
+            try:
+                env = DisasterResponsePettingZoo(env)
+                print("✅ Using PettingZoo multi-agent environment")
+            except Exception as e:
+                print(f"⚠️  PettingZoo wrapper failed: {e}")
+                print("🔄 Using single-agent environment")
+                
+        else:
+            raise ValueError(f"Unknown environment type: {env_config['type']}")
+        
+        return env
     
     def train_with_sb3(self):
         """Train using Stable-Baselines3"""
         if not SB3_AVAILABLE:
             print("❌ Stable-Baselines3 not available")
-            return
+            return False
+            
+        print("🚀 Starting Stable-Baselines3 Training...")
         
-        print("🚀 Starting training with Stable-Baselines3...")
+        # Create environment
+        self.env = self.create_environment()
         
+        # For SB3, we need a gymnasium-compatible env
+        # Create a simple wrapper if needed
+        if not GYMNASIUM_AVAILABLE:
+            print("❌ Gymnasium required for SB3 training")
+            return False
+            
+        # Wrap environment for SB3
         try:
-            # Use the basic environment which now inherits from gym.Env
-            if not self.pettingzoo_available:
-                # Add some agents for the training
-                from agents.drone_agent import DroneAgent
-                drone = DroneAgent("training_drone", [5, 5], self.env.config)
-                self.env.add_agent(drone)
-                self.env.trigger_disaster()
-            
-            # Check if environment is gym-compatible
-            from gymnasium import Env
-            if isinstance(self.env, Env):
-                print("✅ Environment is gymnasium-compatible")
-            else:
-                print("❌ Environment is not gymnasium-compatible")
-                return
-            
-            # Create a single-agent wrapper for demonstration
-            from stable_baselines3.common.env_checker import check_env
-            try:
-                check_env(self.env)
-                print("✅ Environment passed gymnasium check")
-            except Exception as e:
-                print(f"⚠️  Environment check warning: {e}")
-            
-            # Initialize PPO model
+            sb3_env = self._wrap_for_sb3(self.env)
+        except Exception as e:
+            print(f"❌ Failed to wrap environment for SB3: {e}")
+            return False
+        
+        # Initialize model
+        algorithm = self.config['training']['algorithm'].upper()
+        if algorithm == 'PPO':
             self.model = PPO(
-                "MlpPolicy",
-                self.env,
+                'MlpPolicy',
+                sb3_env,
                 learning_rate=self.config['training']['learning_rate'],
-                n_steps=2048,  # Reduced for testing
-                batch_size=64,
-                n_epochs=10,
                 gamma=self.config['training']['gamma'],
-                gae_lambda=self.config['training']['gae_lambda'],
-                clip_range=self.config['training']['clip_range'],
+                batch_size=self.config['training']['batch_size'],
+                n_epochs=self.config['training']['n_epochs'],
                 verbose=1,
                 tensorboard_log="./logs/tensorboard/"
             )
-            
-            # Train the model
-            callback = TrainingCallback()
-            self.model.learn(
-                total_timesteps=10000,  # Reduced for testing
-                callback=callback
+        elif algorithm == 'A2C':
+            self.model = A2C(
+                'MlpPolicy',
+                sb3_env,
+                learning_rate=self.config['training']['learning_rate'],
+                gamma=self.config['training']['gamma'],
+                verbose=1,
+                tensorboard_log="./logs/tensorboard/"
             )
-            
-            # Store training data
-            self.training_data['episode_rewards'] = callback.episode_rewards
-            self.training_data['episode_lengths'] = callback.episode_lengths
-            
-            print("✅ Training completed!")
-            
-        except Exception as e:
-            print(f"❌ Training failed: {e}")
-            import traceback
-            traceback.print_exc()
+        elif algorithm == 'DQN':
+            self.model = DQN(
+                'MlpPolicy',
+                sb3_env,
+                learning_rate=self.config['training']['learning_rate'],
+                gamma=self.config['training']['gamma'],
+                verbose=1,
+                tensorboard_log="./logs/tensorboard/"
+            )
+        else:
+            print(f"❌ Unsupported algorithm: {algorithm}")
+            return False
+        
+        # Create callbacks
+        callback = TrainingMetricsCallback()
+        
+        # Start training
+        start_time = datetime.now()
+        self.model.learn(
+            total_timesteps=self.config['training']['total_timesteps'],
+            callback=callback,
+            tb_log_name=f"{algorithm}_{start_time.strftime('%Y%m%d_%H%M%S')}"
+        )
+        training_time = (datetime.now() - start_time).total_seconds()
+        
+        # Save metrics
+        self.metrics['episode_rewards'] = callback.episode_rewards
+        self.metrics['episode_lengths'] = callback.episode_lengths
+        self.metrics['training_time'] = training_time
+        
+        print(f"✅ Training completed in {training_time:.2f} seconds")
+        return True
     
-    def train_custom(self, num_episodes=1000):
-        """Custom training loop for multi-agent RL"""
-        print("🚀 Starting custom multi-agent training...")
+    def _wrap_for_sb3(self, env):
+        """Wrap environment for Stable-Baselines3"""
+        # Simple wrapper to make environment compatible with SB3
+        class SB3Wrapper(gym.Env):
+            def __init__(self, original_env):
+                super().__init__()
+                self.original_env = original_env
+                self.action_space = gym.spaces.Discrete(6)  # Assuming 6 actions
+                self.observation_space = gym.spaces.Box(
+                    low=0, high=1, shape=(100,)  # Adjust shape as needed
+                )
+                
+            def reset(self, **kwargs):
+                obs, info = self.original_env.reset(**kwargs)
+                return obs, info
+                
+            def step(self, action):
+                return self.original_env.step(action)
+                
+            def render(self):
+                return self.original_env.render()
+                
+            def close(self):
+                return self.original_env.close()
         
-        # Add agents if not already present
-        if not self.env.agents:
-            from agents.drone_agent import DroneAgent
-            from agents.ambulance_agent import AmbulanceAgent
-            
-            drone = DroneAgent("custom_drone", [5, 5], self.env.config)
-            ambulance = AmbulanceAgent("custom_ambulance", [10, 10], self.env.config)
-            
-            self.env.add_agent(drone)
-            self.env.add_agent(ambulance)
-            self.env.trigger_disaster()
+        return SB3Wrapper(env)
+    
+    def train_with_custom(self):
+        """Custom training implementation"""
+        print("🚀 Starting Custom Training...")
         
-        # Simple training implementation for demonstration
-        for episode in range(num_episodes):
-            observation = self.env.reset()
-            episode_reward = 0
+        # Create environment
+        self.env = self.create_environment()
+        
+        # Simple Q-learning implementation for demonstration
+        state_size = 100  # Adjust based on your state representation
+        action_size = 6   # Number of possible actions
+        
+        # Initialize Q-table
+        q_table = np.zeros((state_size, action_size))
+        
+        # Training parameters
+        learning_rate = 0.1
+        discount_factor = 0.95
+        epsilon = 1.0
+        epsilon_decay = 0.995
+        min_epsilon = 0.01
+        episodes = 1000
+        
+        episode_rewards = []
+        
+        for episode in range(episodes):
+            state, _ = self.env.reset()
+            state_idx = self._state_to_index(state)
+            total_reward = 0
+            done = False
             steps = 0
             
-            # ✅ FIXED: Handle both PettingZoo and basic environments
-            if self.pettingzoo_available:
-                # PettingZoo environment
-                while not self.env.env.is_done():
-                    # Simple random policy for demonstration
-                    actions = {}
-                    for agent_id in self.env.agents:
-                        action = np.random.randint(0, 6)  # Random action
-                        actions[agent_id] = action
-                    
-                    # Take step with all actions
-                    for agent_id, action in actions.items():
-                        self.env.step(action)
-                    
-                    steps += 1
-            else:
-                # Basic environment
-                while not self.env.is_done() and steps < 100:
-                    # Simple random policy for demonstration
-                    actions = {}
-                    for agent_id in self.env.agents:
-                        action = np.random.choice(['UP', 'DOWN', 'LEFT', 'RIGHT', 'STAY'])
-                        actions[agent_id] = action
-                    
-                    # Take step with all actions
-                    observation, rewards, done, info = self.env.step(actions)
-                    episode_reward += sum(rewards.values())
-                    steps += 1
-                    
-                    if done:
-                        break
+            while not done and steps < self.config['environment']['max_steps']:
+                # Epsilon-greedy action selection
+                if np.random.random() < epsilon:
+                    action = np.random.randint(action_size)
+                else:
+                    action = np.argmax(q_table[state_idx])
+                
+                # Take action
+                next_state, reward, done, info = self.env.step(action)
+                next_state_idx = self._state_to_index(next_state)
+                
+                # Update Q-table
+                old_value = q_table[state_idx, action]
+                next_max = np.max(q_table[next_state_idx])
+                
+                new_value = (1 - learning_rate) * old_value + learning_rate * (reward + discount_factor * next_max)
+                q_table[state_idx, action] = new_value
+                
+                state_idx = next_state_idx
+                total_reward += reward
+                steps += 1
             
-            # Calculate episode metrics
-            total_civilians = len(self.env.civilians)
-            rescued_civilians = sum(1 for c in self.env.civilians if c['rescued'])
-            rescue_rate = rescued_civilians / max(total_civilians, 1)
+            episode_rewards.append(total_reward)
             
-            # Store metrics
-            self.training_data['episode_rewards'].append(episode_reward)
-            self.training_data['episode_lengths'].append(steps)
-            self.training_data['rescue_rates'].append(rescue_rate)
+            # Decay epsilon
+            epsilon = max(min_epsilon, epsilon * epsilon_decay)
             
-            if episode % 10 == 0:  # Print more frequently for testing
-                print(f"📊 Episode {episode}: Reward={episode_reward:.1f}, "
-                      f"Steps={steps}, Rescue Rate={rescue_rate:.2f}")
+            if episode % 100 == 0:
+                avg_reward = np.mean(episode_rewards[-100:])
+                print(f"Episode {episode} - Avg Reward: {avg_reward:.2f}, Epsilon: {epsilon:.3f}")
         
-        print("✅ Custom training completed!")
+        self.metrics['episode_rewards'] = episode_rewards
+        print("✅ Custom training completed")
+        return True
     
-    def evaluate(self, num_episodes=10):
-        """Evaluate the trained model"""
+    def _state_to_index(self, state):
+        """Convert state to index for Q-table (simplified)"""
+        if isinstance(state, (int, np.integer)):
+            return state % 100
+        elif isinstance(state, np.ndarray):
+            return hash(state.tobytes()) % 100
+        else:
+            return hash(str(state)) % 100
+    
+    def evaluate_model(self, num_episodes=10):
+        """Evaluate trained model"""
         if self.model is None:
             print("❌ No model trained yet")
             return
         
-        print("🧪 Evaluating model...")
+        print(f"🧪 Evaluating model over {num_episodes} episodes...")
         
+        eval_env = self.create_environment(render_mode=None)
         episode_rewards = []
-        rescue_rates = []
         
         for episode in range(num_episodes):
-            observation = self.env.reset()
-            episode_reward = 0
+            state, _ = eval_env.reset()
+            total_reward = 0
             done = False
             
-            if self.pettingzoo_available:
-                # PettingZoo evaluation
-                while not self.env.env.is_done():
-                    if SB3_AVAILABLE and isinstance(self.model, (PPO, DQN, A2C)):
-                        action, _ = self.model.predict(observation, deterministic=True)
-                    else:
-                        action = self.model.get_action(observation)  # Custom models
-                    
-                    observation, reward, done, info = self.env.step(action)
-                    episode_reward += reward
-            else:
-                # Basic environment evaluation
-                while not self.env.is_done():
-                    if SB3_AVAILABLE and isinstance(self.model, (PPO, DQN, A2C)):
-                        action, _ = self.model.predict(observation, deterministic=True)
-                        observation, reward, done, info = self.env.step(action)
-                        episode_reward += reward
-                    else:
-                        # For basic env without model, use random actions
-                        actions = {}
-                        for agent_id in self.env.agents:
-                            action = np.random.choice(['UP', 'DOWN', 'LEFT', 'RIGHT', 'STAY'])
-                            actions[agent_id] = action
-                        
-                        # ✅ FIXED: Handle both gymnasium and legacy step formats
-                        result = self.env.step(actions)
-                        if len(result) == 5:
-                            # Gymnasium format: obs, reward, terminated, truncated, info
-                            observation, reward, terminated, truncated, info = result
-                            rewards = reward  # Convert to single reward
-                            done = terminated or truncated
-                        else:
-                            # Legacy format: obs, rewards, done, info
-                            observation, rewards, done, info = result
-                        episode_reward += sum(rewards.values())
-                    
-                    if done:
-                        break
+            while not done:
+                if SB3_AVAILABLE and isinstance(self.model, (PPO, A2C, DQN)):
+                    action, _ = self.model.predict(state, deterministic=True)
+                else:
+                    # For custom models
+                    action = self.model.act(state)
+                
+                state, reward, done, info = eval_env.step(action)
+                total_reward += reward
             
-            # Calculate rescue rate
-            total_civilians = len(self.env.civilians)
-            rescued_civilians = sum(1 for c in self.env.civilians if c['rescued'])
-            rescue_rate = rescued_civilians / max(total_civilians, 1)
-            
-            episode_rewards.append(episode_reward)
-            rescue_rates.append(rescue_rate)
+            episode_rewards.append(total_reward)
+            print(f"Episode {episode + 1}: Reward = {total_reward:.2f}")
         
         avg_reward = np.mean(episode_rewards)
-        avg_rescue_rate = np.mean(rescue_rates)
+        success_rate = np.mean([r > 0 for r in episode_rewards])
         
         print(f"📊 Evaluation Results:")
         print(f"  Average Reward: {avg_reward:.2f}")
-        print(f"  Average Rescue Rate: {avg_rescue_rate:.2f}")
+        print(f"  Success Rate: {success_rate:.2%}")
         
-        return avg_reward, avg_rescue_rate
+        self.metrics['success_rate'] = success_rate
+        return avg_reward, success_rate
     
-    def visualize_training(self):
-        """Visualize training results"""
-        if any(len(data) > 0 for data in self.training_data.values()):
-            self.visualizer.plot_training_curves(self.training_data)
-        else:
-            print("📊 No training data to visualize yet")
-    
-    def save_model(self, model_name):
-        """Save the trained model"""
+    def save_model(self, filepath=None):
+        """Save trained model"""
         if self.model is None:
             print("❌ No model to save")
-            return
+            return False
+        
+        if filepath is None:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filepath = f"models/disaster_response_{timestamp}"
+        
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        
+        try:
+            if SB3_AVAILABLE and isinstance(self.model, (PPO, A2C, DQN)):
+                self.model.save(filepath)
+            else:
+                # Save custom models
+                import pickle
+                with open(filepath + '.pkl', 'wb') as f:
+                    pickle.dump(self.model, f)
             
-        from .utils.model_loader import ModelLoader
-        
-        loader = ModelLoader()
-        metadata = {
-            'training_config': self.config,
-            'training_data': self.training_data
-        }
-        
-        loader.save_model(self.model, model_name, metadata)
+            print(f"✅ Model saved to {filepath}")
+            return True
+        except Exception as e:
+            print(f"❌ Failed to save model: {e}")
+            return False
     
-    def load_model(self, model_name):
-        """Load a trained model"""
-        from .utils.model_loader import ModelLoader
+    def plot_training_progress(self):
+        """Plot training progress"""
+        if not self.metrics['episode_rewards']:
+            print("❌ No training data to plot")
+            return
         
-        loader = ModelLoader()
-        self.model, metadata = loader.load_model(model_name)
+        plt.figure(figsize=(12, 4))
         
-        if 'training_data' in metadata:
-            self.training_data = metadata['training_data']
+        # Plot rewards
+        plt.subplot(1, 2, 1)
+        plt.plot(self.metrics['episode_rewards'])
+        plt.title('Training Rewards')
+        plt.xlabel('Episode')
+        plt.ylabel('Total Reward')
+        plt.grid(True)
         
-        print("✅ Model loaded successfully!")
+        # Plot moving average
+        if len(self.metrics['episode_rewards']) > 100:
+            moving_avg = np.convolve(self.metrics['episode_rewards'], 
+                                   np.ones(100)/100, mode='valid')
+            plt.plot(range(99, len(self.metrics['episode_rewards'])), moving_avg, 
+                   'r-', linewidth=2, label='Moving Avg (100)')
+            plt.legend()
+        
+        # Plot episode lengths if available
+        if self.metrics['episode_lengths']:
+            plt.subplot(1, 2, 2)
+            plt.plot(self.metrics['episode_lengths'])
+            plt.title('Episode Lengths')
+            plt.xlabel('Episode')
+            plt.ylabel('Steps')
+            plt.grid(True)
+        
+        plt.tight_layout()
+        plt.savefig('training_progress.png', dpi=300, bbox_inches='tight')
+        plt.show()
+
+def main():
+    """Main training function"""
+    print("🚀 Disaster Response AI Training - Week 4")
+    print("============================================================")
+    
+    # Check available frameworks
+    print("🤖 Available ML Frameworks:")
+    print(f"  • Gymnasium: {'✅' if GYMNASIUM_AVAILABLE else '❌'}")
+    print(f"  • Stable-Baselines3: {'✅' if SB3_AVAILABLE else '❌'}")
+    print(f"  • Ray/RLlib: {'✅' if RAY_AVAILABLE else '❌'}")
+    
+    # Initialize trainer
+    trainer = DisasterResponseTrainer()
+    
+    # Training options
+    print("\n🎯 Training Options:")
+    print("1. Custom Training (Basic)")
+    print("2. Stable-Baselines3 Training (Advanced)")
+    print("3. Evaluate Existing Model")
+    
+    try:
+        choice = input("🎯 Choose training method (1-3): ").strip()
+        
+        if choice == "1":
+            success = trainer.train_with_custom()
+        elif choice == "2":
+            success = trainer.train_with_sb3()
+        elif choice == "3":
+            # Load existing model for evaluation
+            model_loader = ModelLoader()
+            model_path = input("Enter model path: ").strip()
+            trainer.model = model_loader.load_model(model_path)
+            if trainer.model:
+                trainer.evaluate_model()
+            return
+        else:
+            print("❌ Invalid choice")
+            return
+        
+        if success:
+            # Evaluate model
+            trainer.evaluate_model()
+            
+            # Save model
+            save_choice = input("💾 Save model? (y/n): ").strip().lower()
+            if save_choice == 'y':
+                trainer.save_model()
+            
+            # Plot results
+            plot_choice = input("📊 Plot training progress? (y/n): ").strip().lower()
+            if plot_choice == 'y':
+                trainer.plot_training_progress()
+            
+            print("🎉 Week 4 Training Completed!")
+            print("🤖 Your agents are now learning to coordinate!")
+            print("🚀 Ready for Week 5: Advanced Features!")
+    
+    except KeyboardInterrupt:
+        print("\n⏹️  Training interrupted by user")
+    except Exception as e:
+        print(f"❌ Training failed: {e}")
+
+if __name__ == "__main__":
+    main()
