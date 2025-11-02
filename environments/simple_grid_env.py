@@ -6,6 +6,10 @@ import yaml
 import random
 import sys
 import os
+from agents.drone_agent import DroneAgent
+from agents.ambulance_agent import AmbulanceAgent
+from agents.rescue_team_agent import RescueTeamAgent
+from agents.base_agent import BaseAgent
 
 # Add parent directory to path to import from utils
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -18,7 +22,7 @@ class SimpleGridEnv(gym.Env):
     Simple grid-based environment for disaster response simulation
     """
     
-    def __init__(self, config_path="config.yaml"):
+    def __init__(self, grid_size=None, config_path="config.yaml"):
         # Load configuration
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
@@ -28,14 +32,27 @@ class SimpleGridEnv(gym.Env):
         
         # Define action and observation spaces
         self.action_space = spaces.Discrete(6)  # 6 actions: UP, DOWN, LEFT, RIGHT, STAY, REST
+
+        # --- START OF FIX ---
+
+        # 1. Determine grid size: Prioritize the 'grid_size' argument if passed,
+        #    otherwise use the value from the config file.
+        if grid_size is not None:
+            self.grid_size = grid_size
+        else:
+            self.grid_size = self.config['environment']['grid_size']
+
+        # 2. Define observation_space *using the grid_size variable*
         self.observation_space = spaces.Box(
             low=0, high=255, 
-            shape=(15, 15, 3),  # Grid size with RGB channels
+            shape=(self.grid_size, self.grid_size, 3),  # <-- WAS HARD-CODED to (15, 15, 3)
             dtype=np.uint8
         )
         
+        # --- END OF FIX ---
+        
         # Environment parameters
-        self.grid_size = self.config['environment']['grid_size']
+        # self.grid_size = self.config['environment']['grid_size'] # <-- This line is now handled above
         self.cell_size = self.config['environment']['cell_size']
         self.cell_types = self.config['environment']['cell_types']
         self.colors = self.config['visualization']['colors']
@@ -49,15 +66,25 @@ class SimpleGridEnv(gym.Env):
         self.blocked_roads = []
         self.disaster_triggered = False
         self.step_count = 0
-        
+        self.width = self.grid_size * self.cell_size
+        self.height = self.grid_size * self.cell_size
         # PyGame setup
-        self.screen = None
+        self.screen = pygame.Surface((self.width, self.height))
         self.font = None
         self.display_available = False
         
         self.initialize_pygame()
         self.reset()
-    
+    def _check_termination_conditions(self):
+        """
+        This is the method definition.
+        Place your termination logic here and return the result.
+        """
+        # This logic will run when the method is called
+        all_are_rescued = all(c['rescued'] for c in self.civilians)
+        
+        # Return the final True/False value
+        return all_are_rescued
     def initialize_pygame(self):
         """Initialize PyGame for visualization - works in headless mode"""
         pygame.init()
@@ -76,7 +103,7 @@ class SimpleGridEnv(gym.Env):
             # If display fails, use headless mode
             print(f"⚠️  No GUI display: {e}")
             print("🔄 Running in headless mode...")
-            self.screen = pygame.Surface((width, height))
+            self.screen = pygame.Surface((self.width, self.height))
             self.font = pygame.font.Font(None, 24)
             self.display_available = False
     
@@ -100,10 +127,11 @@ class SimpleGridEnv(gym.Env):
             if 0 <= pos[0] < self.grid_size and 0 <= pos[1] < self.grid_size:
                 self.grid[pos[0], pos[1]] = self.cell_types['HOSPITAL']
     
-    def reset(self, seed=None, options=None):
+    def reset(self,*, seed=None, options=None):
         """
         Reset the environment - gymnasium compatible
         """
+        
         super().reset(seed=seed)
         
         self.step_count = 0
@@ -114,64 +142,75 @@ class SimpleGridEnv(gym.Env):
         self.blocked_roads = []
         
         self.initialize_grid()
+        try:
+            # You can place them at hospitals or other known safe spots
+            # Inside your reset() method
+            self.add_agent(DroneAgent(agent_id="drone_0", position=[1, 1], config=self.config))
+            self.add_agent(AmbulanceAgent(agent_id="ambulance_0", position=[1, self.grid_size-2], config=self.config))
+            self.add_agent(RescueTeamAgent(agent_id="rescue_0", position=[self.grid_size-2, 1], config=self.config))
+            # self.add_agent(BaseAgent(agent_id="base_0", position=[self.grid_size-2, 1], config=self.config))
         
+        except NameError as e:
+            print(f"ERROR: You forgot to import an agent class. {e}")
+            # ... (error message) ...
+
+        # 3. Trigger disaster (this creates civilians)
+        self.trigger_disaster()
         # Return observation and info
         observation = self._get_gym_observation()
         info = {}
         
         return observation, info
     
-    def step(self, actions):
+    def step(self, action):
         """
         Execute one simulation step - modified for single-agent gym interface
+        Compatible with Gymnasium (returns 5 values)
         """
         self.step_count += 1
-        
-        # For gym interface, we expect a single action
-        if isinstance(actions, dict):
-            # Multi-agent mode (original behavior)
-            for agent_id, action in actions.items():
+
+        # Handle multi-agent or single-agent action input
+        if isinstance(action, dict):
+            # Multi-agent mode
+            for agent_id, action in action.items():
                 if agent_id in self.agents:
                     agent = self.agents[agent_id]
                     if isinstance(action, int):
-                        # Convert numeric action to string
                         action_str = self._decode_action(action)
                     else:
                         action_str = action
                     agent.move(action_str, self.grid)
         else:
             # Single-agent mode (for gym compatibility)
-            # Use the first agent if available
             if self.agents:
                 agent_id = list(self.agents.keys())[0]
                 agent = self.agents[agent_id]
-                action_str = self._decode_action(actions)
+                action_str = self._decode_action(action)
                 agent.move(action_str, self.grid)
-        
+
         # Check for civilian rescues
         self._check_civilian_rescues()
-        
+
         # Calculate rewards
         rewards = self.calculate_rewards()
-        
-        # Check if episode is done
-        terminated = self.is_done() or self._all_civilians_rescued()
+        total_reward = sum(rewards.values()) if isinstance(rewards, dict) else rewards
+
+        # Determine episode end conditions
+        terminated = self._check_termination_conditions()  # optional helper
         truncated = self.step_count >= self.max_steps
-        
-        # Get observation
-        observation = self._get_gym_observation()
-        
+
+        # Compute observation
+        obs = self._get_gym_observation()
+
         info = {
             'step': self.step_count,
             'civilians_rescued': sum(1 for c in self.civilians if c['rescued']),
             'total_civilians': len(self.civilians),
             'agents_count': len(self.agents)
         }
-        
-        # For gym interface, return single reward
-        total_reward = sum(rewards.values()) if isinstance(rewards, dict) else rewards
-        
-        return observation, total_reward, terminated, truncated, info
+
+        return obs, total_reward, terminated, truncated, info
+
     
     def _decode_action(self, action):
         """Decode numeric action to string"""

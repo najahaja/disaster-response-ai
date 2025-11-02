@@ -28,7 +28,8 @@ class BaseAgent:
             'DOWN': (0, 1),
             'LEFT': (-1, 0),
             'RIGHT': (1, 0),
-            'STAY': (0, 0)
+            'STAY': (0, 0),
+            'REST': (0, 0)
         }
     
     def move(self, direction, grid):

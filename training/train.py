@@ -2,6 +2,10 @@
 Training script for Disaster Response AI - Week 4
 Main training orchestration with support for multiple ML frameworks
 """
+
+import torch
+import torch.nn as nn
+from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 import os
 import sys
 import yaml
@@ -43,6 +47,39 @@ except ImportError:
 from environments.simple_grid_env import SimpleGridEnv
 from marl.pettingzoo_wrapper import DisasterResponsePettingZoo
 from training.utils.model_loader import ModelLoader
+
+# Add this ENTIRE class definition to your file
+class CustomCnn(BaseFeaturesExtractor):
+    """
+    Custom CNN for smaller 20x20 images.
+    """
+    def __init__(self, observation_space: gym.spaces.Box, features_dim: int = 64):
+        super(CustomCnn, self).__init__(observation_space, features_dim)
+        # We assume CxHxW images (channels first)
+        n_input_channels = observation_space.shape[0]
+        self.cnn = nn.Sequential(
+            # 20x20 -> (20-5)/2 + 1 = 8x8
+            nn.Conv2d(n_input_channels, 16, kernel_size=5, stride=2, padding=0), 
+            nn.ReLU(),
+            # 8x8 -> (8-3)/2 + 1 = 3x3
+            nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=0), 
+            nn.ReLU(),
+            nn.Flatten(),
+        )
+        
+        # Compute shape by doing one forward pass
+        with torch.no_grad():
+            n_flatten = self.cnn(
+                torch.as_tensor(observation_space.sample()[None]).float()
+            ).shape[1]
+
+        self.linear = nn.Sequential(
+            nn.Linear(n_flatten, features_dim), 
+            nn.ReLU()
+        )
+
+    def forward(self, observations: torch.Tensor) -> torch.Tensor:
+        return self.linear(self.cnn(observations))
 
 class TrainingMetricsCallback(BaseCallback):
     """Custom callback for tracking training metrics"""
@@ -132,12 +169,11 @@ class DisasterResponseTrainer:
         
         if env_config['type'] == 'simple_grid':
             env = SimpleGridEnv(
-                grid_size=env_config['grid_size'],
-                num_civilians=env_config['num_civilians'],
-                num_disasters=env_config['num_disasters'],
-                max_steps=env_config['max_steps'],
-                render_mode=render_mode
-            )
+            grid_size=env_config['grid_size'] 
+            # Note: We are not passing render_mode, num_civilians, etc.
+            # Your SimpleGridEnv must be updated to handle these
+            # if you want to override its internal config.
+        )
             
             # Try to wrap with PettingZoo
             try:
@@ -168,7 +204,10 @@ class DisasterResponseTrainer:
         if not GYMNASIUM_AVAILABLE:
             print("❌ Gymnasium required for SB3 training")
             return False
-            
+        policy_kwargs = dict(
+            features_extractor_class=CustomCnn,
+            features_extractor_kwargs=dict(features_dim=64),
+        )    
         # Wrap environment for SB3
         try:
             sb3_env = self._wrap_for_sb3(self.env)
@@ -180,8 +219,9 @@ class DisasterResponseTrainer:
         algorithm = self.config['training']['algorithm'].upper()
         if algorithm == 'PPO':
             self.model = PPO(
-                'MlpPolicy',
+                'CnnPolicy',
                 sb3_env,
+                policy_kwargs=policy_kwargs,
                 learning_rate=self.config['training']['learning_rate'],
                 gamma=self.config['training']['gamma'],
                 batch_size=self.config['training']['batch_size'],
@@ -191,8 +231,9 @@ class DisasterResponseTrainer:
             )
         elif algorithm == 'A2C':
             self.model = A2C(
-                'MlpPolicy',
+                'CnnPolicy',
                 sb3_env,
+                policy_kwargs=policy_kwargs,
                 learning_rate=self.config['training']['learning_rate'],
                 gamma=self.config['training']['gamma'],
                 verbose=1,
@@ -200,8 +241,9 @@ class DisasterResponseTrainer:
             )
         elif algorithm == 'DQN':
             self.model = DQN(
-                'MlpPolicy',
+                'CnnPolicy',
                 sb3_env,
+                policy_kwargs=policy_kwargs,
                 learning_rate=self.config['training']['learning_rate'],
                 gamma=self.config['training']['gamma'],
                 verbose=1,
@@ -231,32 +273,45 @@ class DisasterResponseTrainer:
         print(f"✅ Training completed in {training_time:.2f} seconds")
         return True
     
+    # --- REPLACE your old _wrap_for_sb3 function with this ---
+
     def _wrap_for_sb3(self, env):
         """Wrap environment for Stable-Baselines3"""
-        # Simple wrapper to make environment compatible with SB3
+        
+        # This wrapper correctly copies the observation/action spaces
+        # and handles the 5 return values from Gymnasium's step function.
         class SB3Wrapper(gym.Env):
             def __init__(self, original_env):
                 super().__init__()
                 self.original_env = original_env
-                self.action_space = gym.spaces.Discrete(6)  # Assuming 6 actions
-                self.observation_space = gym.spaces.Box(
-                    low=0, high=1, shape=(100,)  # Adjust shape as needed
-                )
+                
+                # Copy the spaces from the original environment
+                self.action_space = self.original_env.action_space
+                self.observation_space = self.original_env.observation_space
                 
             def reset(self, **kwargs):
-                obs, info = self.original_env.reset(**kwargs)
+                seed = kwargs.get('seed')
+                # The original_env.reset() should return (obs, info)
+                obs, info = self.original_env.reset(seed=seed) 
                 return obs, info
                 
             def step(self, action):
-                return self.original_env.step(action)
+                # This line correctly unpacks the 5 values from your SimpleGridEnv
+                obs, reward, terminated, truncated, info = self.original_env.step(action)
                 
+                # --- THIS IS THE FIX ---
+                # Return all 5 values in the correct order as expected by Gymnasium/SB3
+                return obs, reward, terminated, truncated, info
+                # -----------------------
+
             def render(self):
                 return self.original_env.render()
                 
             def close(self):
                 return self.original_env.close()
-        
-        return SB3Wrapper(env)
+
+        # Wrap in the custom wrapper, THEN wrap in DummyVecEnv
+        return DummyVecEnv([lambda: SB3Wrapper(env)])
     
     def train_with_custom(self):
         """Custom training implementation"""
@@ -297,7 +352,8 @@ class DisasterResponseTrainer:
                     action = np.argmax(q_table[state_idx])
                 
                 # Take action
-                next_state, reward, done, info = self.env.step(action)
+                next_state, reward, terminated, truncated, info = self.env.step(action)
+                done = terminated or truncated
                 next_state_idx = self._state_to_index(next_state)
                 
                 # Update Q-table
@@ -356,7 +412,8 @@ class DisasterResponseTrainer:
                     # For custom models
                     action = self.model.act(state)
                 
-                state, reward, done, info = eval_env.step(action)
+                state, reward, terminated, truncated, info = eval_env.step(action)
+                done = terminated or truncated
                 total_reward += reward
             
             episode_rewards.append(total_reward)
