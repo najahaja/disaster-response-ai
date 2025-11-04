@@ -1,10 +1,10 @@
-import streamlit as st
-from typing import Dict, Any
-import sys
-import os
+"""
+Control Panel Component for Dashboard
+Handles user inputs and simulation controls
+"""
 
-# Add project root to path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+import streamlit as st
+from typing import Dict, Any, List, Optional
 
 class ControlPanel:
     """
@@ -12,351 +12,410 @@ class ControlPanel:
     """
     
     def __init__(self):
-        self.simulation_state = "stopped"  # stopped, running, paused
-    
-    def render_environment_config(self):
-        """Render environment configuration controls"""
-        st.subheader("🌍 Environment Configuration")
+        self.available_locations = [
+            "Lahore, Pakistan",
+            "Karachi, Pakistan",
+            "Islamabad, Pakistan", 
+            "Faisalabad, Pakistan",
+            "Rawalpindi, Pakistan",
+            "Generated City"
+        ]
         
+        self.agent_types = {
+            "drone": {
+                "name": "🛸 Drone",
+                "description": "Aerial reconnaissance and scouting",
+                "max_count": 5,
+                "default_count": 2
+            },
+            "ambulance": {
+                "name": "🚑 Ambulance", 
+                "description": "Medical evacuation and transport",
+                "max_count": 4,
+                "default_count": 2
+            },
+            "rescue_team": {
+                "name": "👷 Rescue Team",
+                "description": "Search and rescue operations",
+                "max_count": 3,
+                "default_count": 1
+            }
+        }
+    
+    def render_environment_setup(self) -> Dict[str, Any]:
+        """Render environment setup controls"""
+        st.subheader("🗺️ Environment Configuration")
+        
+        # Location selection
+        selected_location = st.selectbox(
+            "Select Location",
+            options=self.available_locations,
+            index=0,
+            help="Choose a real location or generated city"
+        )
+        
+        # Map type information
+        if selected_location == "Generated City":
+            st.info("🏙️ Using procedurally generated city layout")
+        else:
+            st.info("🗺️ Using OpenStreetMap data for realistic layout")
+        
+        # Environment parameters
         col1, col2 = st.columns(2)
         
         with col1:
-            environment_type = st.selectbox(
-                "Environment Type",
-                ["Simple Grid", "Real Map - Lahore", "Real Map - Karachi", "Real Map - Custom"],
-                help="Choose the simulation environment"
-            )
-            
             grid_size = st.slider(
                 "Grid Size",
-                min_value=10,
-                max_value=30,
-                value=15,
+                min_value=15,
+                max_value=50,
+                value=25,
                 help="Size of the simulation grid"
             )
         
         with col2:
-            if "Real Map" in environment_type:
-                location = st.text_input(
-                    "Custom Location",
-                    value="Lahore, Pakistan" if "Lahore" in environment_type else "Karachi, Pakistan" if "Karachi" in environment_type else "",
-                    help="Enter location for real map (e.g., 'Lahore, Pakistan')"
-                )
-            
-            visualization = st.selectbox(
-                "Visualization Mode",
-                ["Full 3D", "2D Top-Down", "Minimal", "Headless"],
-                help="Choose visualization rendering mode"
-            )
-        
-        return {
-            'environment_type': environment_type,
-            'grid_size': grid_size,
-            'location': location if 'location' in locals() else None,
-            'visualization': visualization
-        }
-    
-    def render_agent_config(self):
-        """Render agent configuration controls"""
-        st.subheader("🤖 Agent Configuration")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            num_drones = st.slider(
-                "Number of Drones",
-                min_value=0,
-                max_value=5,
-                value=2,
-                help="Configure drone agents for scouting"
-            )
-            
-            drone_policy = st.selectbox(
-                "Drone Policy",
-                ["Cooperative", "Explorative", "Efficient", "Custom"],
-                help="AI policy for drone behavior"
-            )
-        
-        with col2:
-            num_ambulances = st.slider(
-                "Number of Ambulances", 
-                min_value=0,
-                max_value=3,
-                value=1,
-                help="Configure ambulance agents for transport"
-            )
-            
-            ambulance_policy = st.selectbox(
-                "Ambulance Policy",
-                ["Cooperative", "Efficient", "Priority-Based", "Custom"],
-                help="AI policy for ambulance behavior"
-            )
-        
-        with col3:
-            num_rescue_teams = st.slider(
-                "Number of Rescue Teams",
-                min_value=0,
-                max_value=2,
-                value=1,
-                help="Configure rescue team agents"
-            )
-            
-            rescue_policy = st.selectbox(
-                "Rescue Team Policy", 
-                ["Cooperative", "Efficient", "Safe", "Custom"],
-                help="AI policy for rescue team behavior"
-            )
-        
-        # Advanced agent settings
-        with st.expander("Advanced Agent Settings"):
-            communication_enabled = st.checkbox(
-                "Enable Agent Communication",
-                value=True,
-                help="Allow agents to communicate and share information"
-            )
-            
-            learning_enabled = st.checkbox(
-                "Enable Online Learning",
-                value=False,
-                help="Allow agents to learn and adapt during simulation"
-            )
-            
-            collaboration_level = st.slider(
-                "Collaboration Level",
-                min_value=0.0,
-                max_value=1.0,
-                value=0.7,
-                help="How much agents should collaborate vs compete"
-            )
-        
-        return {
-            'num_drones': num_drones,
-            'num_ambulances': num_ambulances,
-            'num_rescue_teams': num_rescue_teams,
-            'drone_policy': drone_policy,
-            'ambulance_policy': ambulance_policy,
-            'rescue_policy': rescue_policy,
-            'communication_enabled': communication_enabled,
-            'learning_enabled': learning_enabled,
-            'collaboration_level': collaboration_level
-        }
-    
-    def render_disaster_config(self):
-        """Render disaster configuration controls"""
-        st.subheader("🔥 Disaster Scenario")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
             disaster_intensity = st.slider(
                 "Disaster Intensity",
                 min_value=1,
                 max_value=10,
                 value=5,
-                help="Overall intensity of the disaster scenario"
-            )
-            
-            collapsed_buildings = st.slider(
-                "Collapsed Buildings",
-                min_value=5,
-                max_value=30,
-                value=10,
-                help="Number of collapsed buildings"
-            )
-        
-        with col2:
-            civilian_density = st.slider(
-                "Civilian Density",
-                min_value=0.1,
-                max_value=1.0,
-                value=0.3,
-                help="Probability of civilians in collapsed buildings"
-            )
-            
-            blocked_roads = st.slider(
-                "Blocked Roads", 
-                min_value=3,
-                max_value=20,
-                value=5,
-                help="Number of blocked road segments"
-            )
-        
-        # Dynamic events
-        with st.expander("Dynamic Events Configuration"):
-            aftershocks_enabled = st.checkbox(
-                "Enable Aftershocks",
-                value=True,
-                help="Random aftershocks during simulation"
-            )
-            
-            resource_depletion = st.checkbox(
-                "Enable Resource Depletion",
-                value=True,
-                help="Agents can run out of resources"
-            )
-            
-            dynamic_obstacles = st.checkbox(
-                "Enable Dynamic Obstacles",
-                value=False,
-                help="Random obstacles appear during simulation"
+                help="Severity of the disaster scenario"
             )
         
         return {
-            'disaster_intensity': disaster_intensity,
-            'collapsed_buildings': collapsed_buildings,
-            'civilian_density': civilian_density,
-            'blocked_roads': blocked_roads,
-            'aftershocks_enabled': aftershocks_enabled,
-            'resource_depletion': resource_depletion,
-            'dynamic_obstacles': dynamic_obstacles
+            'location': selected_location,
+            'grid_size': grid_size,
+            'disaster_intensity': disaster_intensity
         }
     
-    def render_simulation_controls(self):
+    def render_agent_configuration(self) -> Dict[str, int]:
+        """Render agent configuration controls"""
+        st.subheader("🤖 Agent Configuration")
+        
+        agent_counts = {}
+        
+        for agent_key, agent_info in self.agent_types.items():
+            col1, col2 = st.columns([2, 3])
+            
+            with col1:
+                count = st.slider(
+                    agent_info["name"],
+                    min_value=0,
+                    max_value=agent_info["max_count"],
+                    value=agent_info["default_count"],
+                    key=f"agent_{agent_key}"
+                )
+                agent_counts[agent_key] = count
+            
+            with col2:
+                st.caption(agent_info["description"])
+        
+        # Total agents warning
+        total_agents = sum(agent_counts.values())
+        if total_agents == 0:
+            st.error("❌ Please add at least one agent")
+        elif total_agents > 8:
+            st.warning("⚠️ High agent count may affect performance")
+        else:
+            st.success(f"✅ Total agents: {total_agents}")
+        
+        return agent_counts
+    
+    def render_simulation_controls(self) -> Dict[str, bool]:
         """Render simulation control buttons"""
         st.subheader("🎮 Simulation Controls")
         
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            start_clicked = st.button("🚀 Start Simulation", use_container_width=True, key="start_sim")
-            if start_clicked:
-                self.simulation_state = "running"
-                st.success("Simulation started!")
-        
-        with col2:
-            pause_clicked = st.button("⏸️ Pause Simulation", use_container_width=True, key="pause_sim")
-            if pause_clicked:
-                self.simulation_state = "paused"
-                st.warning("Simulation paused")
-        
-        with col3:
-            stop_clicked = st.button("⏹️ Stop Simulation", use_container_width=True, key="stop_sim")
-            if stop_clicked:
-                self.simulation_state = "stopped"
-                st.info("Simulation stopped")
-        
-        with col4:
-            reset_clicked = st.button("🔄 Reset Simulation", use_container_width=True, key="reset_sim")
-            if reset_clicked:
-                self.simulation_state = "stopped"
-                st.info("Simulation reset")
-        
-        # Simulation speed
-        sim_speed = st.slider(
-            "Simulation Speed",
-            min_value=0.1,
-            max_value=5.0,
-            value=1.0,
-            help="Adjust simulation speed (1.0 = realtime)"
-        )
-        
-        # Current status display
-        status_color = {
-            "running": "🟢",
-            "paused": "🟡", 
-            "stopped": "🔴"
-        }
-        
-        st.markdown(f"**Current Status:** {status_color[self.simulation_state]} {self.simulation_state.upper()}")
-        
-        return {
-            'simulation_state': self.simulation_state,
-            'simulation_speed': sim_speed,
-            'start_clicked': start_clicked,
-            'pause_clicked': pause_clicked,
-            'stop_clicked': stop_clicked,
-            'reset_clicked': reset_clicked
-        }
-    
-    def render_ai_training_controls(self):
-        """Render AI training controls"""
-        st.subheader("🧠 AI Training")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            training_episodes = st.number_input(
-                "Training Episodes",
-                min_value=100,
-                max_value=10000,
-                value=1000,
-                step=100,
-                help="Number of episodes for training"
-            )
-            
-            algorithm = st.selectbox(
-                "RL Algorithm",
-                ["PPO", "DQN", "A2C", "Multi-Agent PPO", "Custom"],
-                help="Reinforcement learning algorithm"
-            )
-        
-        with col2:
-            learning_rate = st.number_input(
-                "Learning Rate",
-                min_value=0.0001,
-                max_value=0.01,
-                value=0.001,
-                format="%.4f",
-                help="Learning rate for AI training"
-            )
-            
-            start_training = st.button("🎯 Start Training", use_container_width=True, key="start_training")
-            if start_training:
-                st.info("AI training started...")
-        
-        col3, col4 = st.columns(2)
-        
-        with col3:
-            save_model = st.button("💾 Save Model", use_container_width=True, key="save_model")
-            if save_model:
-                model_name = st.text_input("Model Name", value="my_trained_model")
-                if model_name:
-                    st.success(f"Model '{model_name}' saved successfully!")
-        
-        with col4:
-            load_model = st.button("📥 Load Model", use_container_width=True, key="load_model")
-            if load_model:
-                st.success("Model loaded successfully!")
-        
-        # Training progress (placeholder)
-        if start_training:
-            st.progress(0.5, text="Training in progress...")
-            st.write("Current Episode: 500/1000")
-            st.write("Average Reward: 125.6")
-            st.write("Rescue Rate: 68%")
-        
-        return {
-            'training_episodes': training_episodes,
-            'algorithm': algorithm,
-            'learning_rate': learning_rate,
-            'start_training': start_training,
-            'save_model': save_model,
-            'load_model': load_model
-        }
-    
-    def render_export_controls(self):
-        """Render data export controls"""
-        st.subheader("📤 Export Data")
+        control_states = {}
         
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            export_csv = st.button("📊 Export CSV", use_container_width=True)
-            if export_csv:
-                st.success("Simulation data exported as CSV!")
+            if st.button("🚀 Start Simulation", width='stretch'):
+                control_states['start'] = True
+            else:
+                control_states['start'] = False
         
         with col2:
-            export_video = st.button("🎥 Export Video", use_container_width=True)
-            if export_video:
-                st.success("Simulation recording exported as video!")
+            if st.button("⏸️ Pause Simulation", width='stretch'):
+                control_states['pause'] = True
+            else:
+                control_states['pause'] = False
         
         with col3:
-            export_report = st.button("📄 Export Report", use_container_width=True)
-            if export_report:
-                st.success("Comprehensive report generated!")
+            if st.button("⏹️ Stop Simulation", width='stretch'):
+                control_states['stop'] = True
+            else:
+                control_states['stop'] = False
         
-        return {
-            'export_csv': export_csv,
-            'export_video': export_video,
-            'export_report': export_report
+        # Additional controls
+        col4, col5 = st.columns(2)
+        
+        with col4:
+            if st.button("🚨 Trigger Disaster", width='stretch'):
+                control_states['disaster'] = True
+            else:
+                control_states['disaster'] = False
+        
+        with col5:
+            if st.button("🔄 Reset Simulation", width='stretch'):
+                control_states['reset'] = True
+            else:
+                control_states['reset'] = False
+        
+        return control_states
+    
+    def render_simulation_settings(self) -> Dict[str, Any]:
+        """Render simulation settings"""
+        st.subheader("⚙️ Simulation Settings")
+        
+        settings = {}
+        
+        # Simulation speed
+        settings['speed'] = st.slider(
+            "Simulation Speed",
+            min_value=1,
+            max_value=10,
+            value=3,
+            help="Faster speed may reduce visualization quality"
+        )
+        
+        # Auto-step
+        settings['auto_step'] = st.checkbox(
+            "Auto-advance steps",
+            value=True,
+            help="Automatically advance simulation steps"
+        )
+        
+        # Step delay
+        if settings['auto_step']:
+            settings['step_delay'] = st.slider(
+                "Step Delay (ms)",
+                min_value=100,
+                max_value=2000,
+                value=500,
+                help="Delay between auto-steps in milliseconds"
+            )
+        
+        # Visualization options
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            settings['show_grid'] = st.checkbox("Show Grid", value=True)
+            settings['show_agents'] = st.checkbox("Show Agents", value=True)
+        
+        with col2:
+            settings['show_civilians'] = st.checkbox("Show Civilians", value=True)
+            settings['show_paths'] = st.checkbox("Show Paths", value=False)
+        
+        return settings
+    
+    def render_advanced_settings(self) -> Dict[str, Any]:
+        """Render advanced simulation settings"""
+        with st.expander("🔧 Advanced Settings"):
+            advanced = {}
+            
+            # MARL settings
+            st.markdown("**Multi-Agent RL Settings**")
+            advanced['learning_enabled'] = st.checkbox(
+                "Enable Learning",
+                value=False,
+                help="Enable reinforcement learning for agents"
+            )
+            
+            if advanced['learning_enabled']:
+                advanced['learning_rate'] = st.slider(
+                    "Learning Rate",
+                    min_value=0.001,
+                    max_value=0.1,
+                    value=0.01,
+                    format="%.3f"
+                )
+                
+                advanced['exploration_rate'] = st.slider(
+                    "Exploration Rate",
+                    min_value=0.01,
+                    max_value=1.0,
+                    value=0.1,
+                    format="%.2f"
+                )
+            
+            # Communication settings
+            st.markdown("**Communication Settings**")
+            advanced['communication_enabled'] = st.checkbox(
+                "Enable Agent Communication",
+                value=True,
+                help="Allow agents to share information"
+            )
+            
+            if advanced['communication_enabled']:
+                advanced['comm_range'] = st.slider(
+                    "Communication Range",
+                    min_value=1,
+                    max_value=10,
+                    value=5
+                )
+            
+            # Performance settings
+            st.markdown("**Performance Settings**")
+            advanced['max_steps'] = st.number_input(
+                "Maximum Steps",
+                min_value=100,
+                max_value=10000,
+                value=1000,
+                help="Maximum simulation steps before auto-reset"
+            )
+            
+            advanced['parallel_processing'] = st.checkbox(
+                "Parallel Processing",
+                value=False,
+                help="Use parallel processing for agent decisions (experimental)"
+            )
+            
+            return advanced
+    
+    def render_quick_actions(self):
+        """Render quick action buttons"""
+        st.subheader("⚡ Quick Actions")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            if st.button("📊 Save Snapshot", width='stretch'):
+                st.session_state.save_snapshot = True
+        
+        with col2:
+            if st.button("📹 Record Video", width='stretch'):
+                st.session_state.record_video = True
+        
+        with col3:
+            if st.button("📋 Export Data", width='stretch'):
+                st.session_state.export_data = True
+        
+        with col4:
+            if st.button("🖼️ Screenshot", width='stretch'):
+                st.session_state.take_screenshot = True
+    
+    def render_preset_scenarios(self) -> Optional[str]:
+        """Render preset scenario selection"""
+        st.subheader("🎯 Preset Scenarios")
+        
+        scenarios = {
+            "earthquake": {
+                "name": "🌋 Earthquake Response",
+                "description": "Urban earthquake with building collapses",
+                "agents": {"drone": 3, "ambulance": 3, "rescue_team": 2},
+                "intensity": 8
+            },
+            "flood": {
+                "name": "🌊 Flood Response", 
+                "description": "Flooding scenario with water obstacles",
+                "agents": {"drone": 2, "ambulance": 2, "rescue_team": 1},
+                "intensity": 6
+            },
+            "fire": {
+                "name": "🔥 Fire Response",
+                "description": "Urban fire with spreading hazards",
+                "agents": {"drone": 4, "ambulance": 2, "rescue_team": 1},
+                "intensity": 7
+            },
+            "custom": {
+                "name": "⚙️ Custom Scenario",
+                "description": "Configure your own scenario",
+                "agents": {},
+                "intensity": 5
+            }
         }
+        
+        scenario_options = {key: f"{scenario['name']} - {scenario['description']}" 
+                          for key, scenario in scenarios.items()}
+        
+        selected_scenario = st.selectbox(
+            "Choose Scenario",
+            options=list(scenario_options.keys()),
+            format_func=lambda x: scenario_options[x],
+            index=3  # Default to custom
+        )
+        
+        # Show scenario details
+        if selected_scenario != "custom":
+            scenario = scenarios[selected_scenario]
+            st.info(f"**{scenario['name']}**\n\n{scenario['description']}")
+            
+            # Auto-configure if requested
+            if st.button(f"Apply {scenario['name']} Configuration", width='stretch'):
+                st.session_state.preset_scenario = selected_scenario
+                st.session_state.agent_config = scenario['agents']
+                st.session_state.disaster_intensity = scenario['intensity']
+                st.success(f"✅ {scenario['name']} configuration applied!")
+        
+        return selected_scenario
+    
+    def get_current_configuration(self) -> Dict[str, Any]:
+        """Get the current configuration from all controls"""
+        config = {}
+        
+        # Environment config
+        config['environment'] = self.render_environment_setup()
+        
+        # Agent config  
+        config['agents'] = self.render_agent_configuration()
+        
+        # Simulation settings
+        config['settings'] = self.render_simulation_settings()
+        
+        # Advanced settings
+        config['advanced'] = self.render_advanced_settings()
+        
+        # Preset scenario
+        config['scenario'] = self.render_preset_scenarios()
+        
+        # Quick actions
+        self.render_quick_actions()
+        
+        return config
+    
+    def validate_configuration(self, config: Dict[str, Any]) -> List[str]:
+        """Validate the configuration and return any errors"""
+        errors = []
+        
+        # Check agent counts
+        total_agents = sum(config['agents'].values())
+        if total_agents == 0:
+            errors.append("At least one agent must be configured")
+        
+        if total_agents > 10:
+            errors.append("Maximum 10 agents allowed for performance reasons")
+        
+        # Check environment settings
+        if config['environment']['grid_size'] < 10:
+            errors.append("Grid size must be at least 10x10")
+        
+        # Check advanced settings
+        if config['advanced'].get('max_steps', 1000) < 100:
+            errors.append("Maximum steps must be at least 100")
+        
+        return errors
+
+# Test function
+def test_control_panel():
+    """Test the control panel component"""
+    st.title("Control Panel Test")
+    
+    panel = ControlPanel()
+    
+    # Test all components
+    config = panel.get_current_configuration()
+    
+    st.subheader("Current Configuration")
+    st.json(config)
+    
+    # Validate configuration
+    errors = panel.validate_configuration(config)
+    if errors:
+        st.error("Configuration errors:")
+        for error in errors:
+            st.write(f"❌ {error}")
+    else:
+        st.success("✅ Configuration is valid!")
+
+if __name__ == "__main__":
+    test_control_panel()

@@ -86,26 +86,21 @@ class SimpleGridEnv(gym.Env):
         # Return the final True/False value
         return all_are_rescued
     def initialize_pygame(self):
-        """Initialize PyGame for visualization - works in headless mode"""
+        """Initialize PyGame for visualization - FORCED HEADLESS for Streamlit"""
         pygame.init()
         
-        # Check if we're in a headless environment
-        try:
-            # Try to create a display
-            width = self.grid_size * self.cell_size + 200
-            height = self.grid_size * self.cell_size
-            self.screen = pygame.display.set_mode((width, height))
-            pygame.display.set_caption("AI Disaster Response Simulation")
-            self.font = pygame.font.Font(None, 24)
-            self.display_available = True
-            print("✅ GUI display available")
-        except pygame.error as e:
-            # If display fails, use headless mode
-            print(f"⚠️  No GUI display: {e}")
-            print("🔄 Running in headless mode...")
-            self.screen = pygame.Surface((self.width, self.height))
-            self.font = pygame.font.Font(None, 24)
-            self.display_available = False
+        # We are using this with Streamlit, so we force headless mode
+        # by not calling pygame.display.set_mode()
+        width = self.grid_size * self.cell_size + 200
+        height = self.grid_size * self.cell_size
+        
+        # This creates a "virtual" screen (a Surface) that doesn't open a window
+        self.screen = pygame.Surface((width, height)) 
+        self.font = pygame.font.Font(None, 24)
+        self.display_available = False # Set to False so pygame.display.flip() is never called
+        
+        # We can still "print" that the GUI is (virtually) available for our app
+        print("✅ PyGame initialized in headless mode for Streamlit.")
     
     def initialize_grid(self):
         """Initialize the grid with buildings, roads, and hospitals"""
@@ -155,7 +150,7 @@ class SimpleGridEnv(gym.Env):
             # ... (error message) ...
 
         # 3. Trigger disaster (this creates civilians)
-        self.trigger_disaster()
+        # self.trigger_disaster()
         # Return observation and info
         observation = self._get_gym_observation()
         info = {}
@@ -196,7 +191,7 @@ class SimpleGridEnv(gym.Env):
         total_reward = sum(rewards.values()) if isinstance(rewards, dict) else rewards
 
         # Determine episode end conditions
-        terminated = self._check_termination_conditions()  # optional helper
+        terminated = self._all_civilians_rescued()
         truncated = self.step_count >= self.max_steps
 
         # Compute observation
@@ -250,7 +245,6 @@ class SimpleGridEnv(gym.Env):
     def _all_civilians_rescued(self):
         """Check if all civilians have been rescued"""
         return all(civ['rescued'] for civ in self.civilians) if self.civilians else False
-    
     def get_observation(self):
         """Get current observation of the environment (original method)"""
         return {
@@ -273,9 +267,7 @@ class SimpleGridEnv(gym.Env):
         return rewards
     
     def render(self):
-        """Render the current state using PyGame"""
-        if not self.display_available:
-            return
+        """Render the current state using PyGame and RETURN the surface"""
         
         self.screen.fill((0, 0, 0))  # Clear screen
         
@@ -290,11 +282,12 @@ class SimpleGridEnv(gym.Env):
         
         # Draw info panel
         VisualizationUtils.draw_info_panel(self.screen, self.step_count, 
-                                         self.agents, self.civilians, self.font)
+                                        self.agents, self.civilians, self.font)
         
-        # Only update display if available
-        if self.display_available:
-            pygame.display.flip()
+        # DO NOT call pygame.display.flip()
+        
+        # RETURN the surface for Streamlit to use
+        return self.screen
     
     def trigger_disaster(self):
         """Trigger disaster scenario"""

@@ -25,7 +25,7 @@ def main():
     
     try:
         # Create environment
-        env = SimpleGridEnv("config.yaml")
+        env = SimpleGridEnv(config_path="config.yaml")
         
         # Add agents
         drone1 = DroneAgent("drone_1", [2, 2], env.config)

@@ -28,7 +28,7 @@ class SimulationViewer:
         """Render the simulation viewer"""
         if self.current_frame:
             # Display the current frame
-            st.image(self.current_frame, use_column_width=True, 
+            st.image(self.current_frame, width='stretch', 
                     caption="Live Simulation View")
         else:
             # Placeholder when no frame available
@@ -69,6 +69,6 @@ class SimulationViewer:
         
         # Create image
         img = Image.fromarray(sample_grid, 'RGB')
-        img = img.resize((grid_size * cell_size, grid_size * cell_size), Image.NEAREST)
+        img = img.resize((grid_size * cell_size, grid_size * cell_size), Image.Resampling.NEAREST)
         
-        st.image(img, use_column_width=True, caption="Sample Environment Layout")
+        st.image(img,width='stretch', caption="Sample Environment Layout")
