@@ -34,14 +34,28 @@ class BaseAgent:
     
     def move(self, direction, grid):
         """
-        Move the agent in the specified direction
+        Move the agent in the specified direction.
+        Can accept an integer (0-5) or a string ("UP", "DOWN", etc.).
         Returns: Boolean indicating if move was successful
         """
-        if direction not in self.directions:
-            print(f"⚠️  Invalid direction: {direction}")
+        
+        # --- START OF FIX ---
+        # Decode the action if it's an integer
+        if isinstance(direction, int):
+            # This list must match the one in simple_grid_env.py
+            actions_list = ['UP', 'DOWN', 'LEFT', 'RIGHT', 'STAY', 'REST']
+            direction_str = actions_list[direction] if 0 <= direction < len(actions_list) else 'STAY'
+        else:
+            direction_str = direction
+        # --- END OF FIX ---
+
+        # Now, use the guaranteed string 'direction_str' for all checks
+        if direction_str not in self.directions:
+            # This is the line that's printing your error
+            print(f"⚠️  Invalid direction: {direction_str}")
             return False
             
-        new_position = self._calculate_new_position(direction)
+        new_position = self._calculate_new_position(direction_str)
         
         if self._is_valid_move(new_position, grid):
             self.position = new_position

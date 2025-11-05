@@ -230,7 +230,7 @@ class DisasterResponseDashboard:
             })
             fig = px.line(sample_data, x='Time', y=['Rescues', 'Efficiency'], 
                          title="Expected Performance Trend")
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, use_container_width=True)
         
         with col2:
             # Sample agent distribution
@@ -242,7 +242,7 @@ class DisasterResponseDashboard:
             })
             fig = px.pie(agent_data, values='Count', names='Agent Type', 
                         title="Agent Team Composition")
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, use_container_width=True)
     
     def render_simulation_dashboard(self):
         """Render simulation dashboard when running"""
@@ -396,7 +396,7 @@ class DisasterResponseDashboard:
         
         fig = px.line(time_data, x='Step', y=['Rescues', 'Efficiency'],
                      title="Performance Over Time")
-        st.plotly_chart(fig, width='stretch')
+        st.plotly_chart(fig,use_container_width=True)
     
     def render_environment_analytics(self):
         """Render environment analytics"""
@@ -416,7 +416,7 @@ class DisasterResponseDashboard:
             
             df = pd.DataFrame(cell_data)
             fig = px.bar(df, x='Type', y='Count', title="Environment Composition")
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, use_container_width=True)
     
     def render_agent_analytics(self):
         """Render agent analytics"""
@@ -434,7 +434,7 @@ class DisasterResponseDashboard:
                 'Count': list(agent_types.values())
             })
             fig = px.pie(df, values='Count', names='Agent Type', title="Agent Distribution")
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, use_container_width=True)
     
     def start_simulation(self, location, num_drones, num_ambulances, num_rescue_teams):
         """Start a new simulation"""
