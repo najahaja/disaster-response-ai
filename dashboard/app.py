@@ -26,7 +26,8 @@ from agents.rescue_team_agent import RescueTeamAgent
 from dashboard.components.controls import ControlPanel
 from dashboard.components.metrics_display import MetricsDisplay
 from dashboard.components.simulation_viewer import SimulationViewer
-
+import pygame
+pygame.init()
 class DisasterResponseDashboard:
     """
     Main dashboard class for Disaster Response AI simulation
