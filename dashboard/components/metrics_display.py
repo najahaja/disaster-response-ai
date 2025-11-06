@@ -180,7 +180,7 @@ class MetricsDisplay:
             yaxis_title="Rescue Rate (%)",
             height=300
         )
-        st.plotly_chart(fig1, use_container_width=True)
+        st.plotly_chart(fig1, width='stretch')
         
         # Efficiency trend
         fig2 = go.Figure()
@@ -197,7 +197,7 @@ class MetricsDisplay:
             yaxis_title="Efficiency Score",
             height=300
         )
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width='stretch')
     
     def _render_agent_trends(self):
         """Render agent-related trend charts"""
@@ -216,7 +216,7 @@ class MetricsDisplay:
             yaxis_title="Activity Score",
             height=300
         )
-        st.plotly_chart(fig1, use_container_width=True)
+        st.plotly_chart(fig1, width='stretch')
         
         # Collaboration
         fig2 = go.Figure()
@@ -233,7 +233,7 @@ class MetricsDisplay:
             yaxis_title="Collaboration Score",
             height=300
         )
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width='stretch')
     
     def _render_environment_trends(self):
         """Render environment-related trend charts"""
@@ -252,7 +252,7 @@ class MetricsDisplay:
             yaxis_title="Damage Index",
             height=300
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     
     def render_agent_analytics(self, environment):
         """Render detailed agent analytics"""
@@ -293,7 +293,7 @@ class MetricsDisplay:
                 names=type_counts.index,
                 title="Agent Type Distribution"
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         else:
             st.info("No agents in simulation")
     
@@ -335,7 +335,7 @@ class MetricsDisplay:
                 title="Environment Composition",
                 color='Cell Type'
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
             
             # Display composition table
             st.dataframe(

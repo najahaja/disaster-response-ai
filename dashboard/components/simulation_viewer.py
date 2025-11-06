@@ -4,6 +4,7 @@ import numpy as np
 from typing import Optional
 import io
 from PIL import Image
+import plotly.graph_objects as go  # ← ADD THIS IMPORT
 
 class SimulationViewer:
     """
@@ -71,4 +72,56 @@ class SimulationViewer:
         img = Image.fromarray(sample_grid, 'RGB')
         img = img.resize((grid_size * cell_size, grid_size * cell_size), Image.Resampling.NEAREST)
         
-        st.image(img,width='stretch', caption="Sample Environment Layout")
+        st.image(img, width='stretch', caption="Sample Environment Layout")
+
+    def create_simulation_plot(self, environment):
+        """Create a Plotly visualization of the simulation - FIXED COLORSCALE"""
+        try:
+            # Get grid data from environment
+            if hasattr(environment, 'grid'):
+                grid_data = environment.grid
+            else:
+                # Create a simple grid if no environment grid exists
+                grid_size = getattr(environment, 'grid_size', 15)
+                grid_data = np.zeros((grid_size, grid_size))
+                
+                # Mark agent positions
+                for agent_id, agent in environment.agents.items():
+                    pos = getattr(agent, 'position', None)
+                    if pos is not None and len(pos) == 2:
+                        x, y = int(pos[0]), int(pos[1])
+                        if 0 <= x < grid_size and 0 <= y < grid_size:
+                            if 'drone' in agent_id:
+                                grid_data[x, y] = 1  # Drones
+                            elif 'ambulance' in agent_id:
+                                grid_data[x, y] = 2  # Ambulances
+                            elif 'rescue' in agent_id:
+                                grid_data[x, y] = 3  # Rescue teams
+            
+            # Create heatmap with CORRECT colorscale format
+            fig = go.Figure(data=go.Heatmap(
+                z=grid_data,
+                colorscale=[
+                    [0.0, 'lightgray'],    # Empty - 0.0 instead of 0
+                    [0.25, 'blue'],        # Drones - 0.25 instead of 1
+                    [0.5, 'green'],        # Ambulances - 0.5 instead of 2  
+                    [0.75, 'orange'],      # Rescue teams - 0.75 instead of 3
+                    [1.0, 'red']           # Other - 1.0 instead of 4
+                ],
+                showscale=True,
+                hoverinfo='z'
+            ))
+            
+            fig.update_layout(
+                title="Simulation Grid View",
+                xaxis_title="X Coordinate",
+                yaxis_title="Y Coordinate",
+                width=600,
+                height=600
+            )
+            
+            return fig
+            
+        except Exception as e:
+            st.error(f"Error creating simulation plot: {e}")
+            return None
