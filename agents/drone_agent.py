@@ -11,12 +11,7 @@ class DroneAgent(BaseAgent):
         self.scouted_locations = set()
         self.scout_range = 3  # Cells around drone that can be scouted
     
-    def move(self, direction, grid):
-        """Override move to include scouting"""
-        success = super().move(direction, grid)
-        if success:
-            self._scout_area(grid)
-        return success
+    
     
     def _scout_area(self, grid):
         """Scout the area around the drone"""

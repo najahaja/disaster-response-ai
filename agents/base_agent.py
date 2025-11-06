@@ -41,7 +41,7 @@ class BaseAgent:
         
         # --- START OF FIX ---
         # Decode the action if it's an integer
-        if isinstance(direction, int):
+        if isinstance(direction, (int, np.integer)):
             # This list must match the one in simple_grid_env.py
             actions_list = ['UP', 'DOWN', 'LEFT', 'RIGHT', 'STAY', 'REST']
             direction_str = actions_list[direction] if 0 <= direction < len(actions_list) else 'STAY'
