@@ -129,19 +129,19 @@ class ControlPanel:
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            if st.button("🚀 Start Simulation", width='stretch'):
+            if st.button("🚀 Start Simulation", use_container_width=True):
                 control_states['start'] = True
             else:
                 control_states['start'] = False
         
         with col2:
-            if st.button("⏸️ Pause Simulation", width='stretch'):
+            if st.button("⏸️ Pause Simulation", use_container_width=True):
                 control_states['pause'] = True
             else:
                 control_states['pause'] = False
         
         with col3:
-            if st.button("⏹️ Stop Simulation", width='stretch'):
+            if st.button("⏹️ Stop Simulation", use_container_width=True):
                 control_states['stop'] = True
             else:
                 control_states['stop'] = False
@@ -150,13 +150,13 @@ class ControlPanel:
         col4, col5 = st.columns(2)
         
         with col4:
-            if st.button("🚨 Trigger Disaster", width='stretch'):
+            if st.button("🚨 Trigger Disaster", use_container_width=True):
                 control_states['disaster'] = True
             else:
                 control_states['disaster'] = False
         
         with col5:
-            if st.button("🔄 Reset Simulation", width='stretch'):
+            if st.button("🔄 Reset Simulation", use_container_width=True):
                 control_states['reset'] = True
             else:
                 control_states['reset'] = False
@@ -279,19 +279,19 @@ class ControlPanel:
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            if st.button("📊 Save Snapshot", width='stretch'):
+            if st.button("📊 Save Snapshot", use_container_width=True):
                 st.session_state.save_snapshot = True
         
         with col2:
-            if st.button("📹 Record Video", width='stretch'):
+            if st.button("📹 Record Video", use_container_width=True):
                 st.session_state.record_video = True
         
         with col3:
-            if st.button("📋 Export Data", width='stretch'):
+            if st.button("📋 Export Data", use_container_width=True):
                 st.session_state.export_data = True
         
         with col4:
-            if st.button("🖼️ Screenshot", width='stretch'):
+            if st.button("🖼️ Screenshot", use_container_width=True):
                 st.session_state.take_screenshot = True
     
     def render_preset_scenarios(self) -> Optional[str]:
@@ -341,7 +341,7 @@ class ControlPanel:
             st.info(f"**{scenario['name']}**\n\n{scenario['description']}")
             
             # Auto-configure if requested
-            if st.button(f"Apply {scenario['name']} Configuration", width='stretch'):
+            if st.button(f"Apply {scenario['name']} Configuration",use_container_width=True):
                 st.session_state.preset_scenario = selected_scenario
                 st.session_state.agent_config = scenario['agents']
                 st.session_state.disaster_intensity = scenario['intensity']

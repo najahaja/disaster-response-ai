@@ -156,7 +156,7 @@ class DisasterResponseDashboard:
     
     def render_header(self):
         """Render enhanced dashboard header"""
-        st.markdown('<h1 class="main-header">🚨 Disaster Response AI Dashboard v2.0</h1>', 
+        st.markdown('<h1 class="main-header">🚨 Disaster Response AI Dashboard </h1>', 
                    unsafe_allow_html=True)
         
         # Enhanced status indicator with more metrics
@@ -203,11 +203,11 @@ class DisasterResponseDashboard:
             # Environment selection with enhanced options
             st.subheader("🗺️ Environment Setup")
             location_options = [
-                "Lahore, Pakistan",
-                "Karachi, Pakistan", 
-                "Islamabad, Pakistan",
-                "Tokyo, Japan",
-                "New York, USA", 
+                "Lahore",
+                "Karachi", 
+                "Islamabad",
+                "Tokyo",
+                "New York", 
                 "Generated City"
             ]
             selected_location = st.selectbox(
@@ -235,21 +235,21 @@ class DisasterResponseDashboard:
             
             control_col1, control_col2 = st.columns(2)
             with control_col1:
-                if st.button("🚀 Start Simulation", width='stretch', 
+                if st.button("🚀 Start Simulation", use_container_width=True, 
                            help="Start new simulation with current configuration"):
                     self.start_simulation(selected_location, num_drones, num_ambulances, num_rescue_teams, auto_deploy)
             
             with control_col2:
-                if st.button("⏹️ Stop Simulation", width='stretch',
+                if st.button("⏹️ Stop Simulation", use_container_width=True,
                            help="Stop current simulation"):
                     self.stop_simulation()
             
             # Additional control buttons
-            if st.button("🚨 Trigger Disaster", width='stretch',
+            if st.button("🚨 Trigger Disaster", use_container_width=True,
                        help="Trigger disaster scenario in current simulation"):
                 self.trigger_disaster()
             
-            if st.button("🔄 Reset Simulation", width='stretch',
+            if st.button("🔄 Reset Simulation", use_container_width=True,
                        help="Reset simulation to initial state"):
                 self.reset_simulation()
             
@@ -304,7 +304,7 @@ class DisasterResponseDashboard:
     
     def render_main_content(self):
         """Render main dashboard content with enhanced layout"""
-        if not st.session_state.simulation_running:
+        if st.session_state.environment is None:
             self.render_enhanced_welcome_screen()
         else:
             self.render_enhanced_simulation_dashboard()
@@ -312,44 +312,12 @@ class DisasterResponseDashboard:
     def render_enhanced_welcome_screen(self):
         """Render enhanced welcome screen"""
         st.markdown("""
-        ## 🌟 Welcome to Disaster Response AI Dashboard v2.0
+        ## 🌟 Welcome to Disaster Response AI Dashboard 
         
-        **Week 6 Enhanced Features:**
-        - 🚀 **Improved Performance**: Faster simulation and rendering
-        - 🛡️ **Enhanced Error Handling**: Better stability and user feedback  
-        - 📈 **Advanced Analytics**: Comprehensive performance tracking
-        - 💾 **Auto-save**: Automatic progress saving
-        - 🎯 **Multiple Modes**: Basic, Advanced, and Training modes
         
-        ### 🎯 What's New in Week 6:
         """)
         
-        # New features showcase
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.info("""
-            **🧪 Comprehensive Testing**
-            - Unit tests for all components
-            - Integration testing
-            - Performance benchmarking
-            """)
-        
-        with col2:
-            st.info("""
-            **📚 Enhanced Documentation**
-            - API references
-            - User manuals  
-            - Deployment guides
-            """)
-        
-        with col3:
-            st.info("""
-            **🚀 Production Ready**
-            - Error recovery
-            - Performance optimization
-            - Professional logging
-            """)
+       
         
         # Quick start guide
         with st.expander("🚀 Quick Start Guide", expanded=True):
@@ -381,7 +349,7 @@ class DisasterResponseDashboard:
             fig = px.line(sample_data, x='Time', y=['Rescues', 'Efficiency', 'Collaboration'],
                          title="Expected Performance Trends", 
                          labels={'value': 'Score', 'variable': 'Metric'})
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, use_container_width=True)
         
         with tab2:
             # Sample agent distribution
@@ -392,7 +360,7 @@ class DisasterResponseDashboard:
             })
             fig = px.pie(agent_data, values='Count', names='Agent Type', 
                         title="Optimal Team Composition", color='Color')
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, use_container_width=True)
         
         with tab3:
             # Scenario success rates
@@ -403,7 +371,7 @@ class DisasterResponseDashboard:
             })
             fig = px.bar(scenario_data, x='Scenario', y='Success Rate',
                         title="Scenario Success Rates", color='Success Rate')
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, use_container_width=True)
     
     def render_enhanced_simulation_dashboard(self):
         """Render enhanced simulation dashboard"""
@@ -428,19 +396,27 @@ class DisasterResponseDashboard:
         
         with col1:
             st.subheader("🎯 Live Simulation View")
+            
+            # --- START OF FIX ---
+            # 1. Create the placeholder ONCE, before the 'if'
+            image_placeholder = st.empty()
+            
             if st.session_state.environment:
                 try:
-                    # Get current simulation state for visualization
                     env = st.session_state.environment
                     
-                    # Create enhanced visualization
-                    fig = self.simulation_viewer.create_simulation_plot(env)
-                    if fig:
-                        st.plotly_chart(fig, width='stretch')
-                    else:
-                        st.warning("Visualization not available")
+                    # 2. Get the Pygame surface from the environment
+                    pygame_surface = env.render()
                     
-                    # Auto-advance simulation if running
+                    if pygame_surface is not None:
+                        # 3. Update the viewer's frame with the new image
+                        self.simulation_viewer.update_frame(pygame_surface)
+                    
+                    # 4. Tell the viewer to render itself *inside* the placeholder
+                    #    (This assumes your simulation_viewer.py is also fixed)
+                    self.simulation_viewer.render(image_placeholder)
+                    
+                    # 5. Auto-advance simulation if running
                     if st.session_state.simulation_running:
                         self.advance_simulation()
                         
@@ -448,8 +424,11 @@ class DisasterResponseDashboard:
                     self.handle_error(f"Visualization error: {e}")
                     st.error("❌ Failed to render simulation view")
             else:
-                st.info("No active simulation")
-        
+                st.info("No active simulation. Start one from the sidebar.")
+                # Render the placeholder even if not running
+                self.simulation_viewer.render(image_placeholder)
+            # --- END OF FIX ---
+
         with col2:
             st.subheader("🚨 Immediate Actions")
             self.render_quick_actions()
@@ -466,16 +445,29 @@ class DisasterResponseDashboard:
             # Generate actions for all agents
             actions = {}
             for agent_id, agent in env.agents.items():
-                # Simple movement pattern - in a real scenario, this would use policies
-                possible_actions = ['UP', 'DOWN', 'LEFT', 'RIGHT', 'STAY']
-                actions[agent_id] = np.random.choice(possible_actions)
+                # We use (int, np.integer) to be safe
+                if isinstance(env.action_space.sample(), (int, np.integer)):
+                     actions[agent_id] = env.action_space.sample()
+                else:
+                     actions[agent_id] = 0 # Default to 'UP'
             
-            # Execute step
-            result = env.step(actions)
+            # Execute step and GET THE RETURN VALUES
+            obs, reward, terminated, truncated, info = env.step(actions)
             
             # Update metrics
             self.update_simulation_data()
             
+            # --- THIS IS THE FIX ---
+            # Check if the simulation is over
+            if terminated or truncated:
+                st.session_state.simulation_running = False
+                st.balloons()
+                st.success("Simulation Complete!")
+                # We must re-run one last time to show the "Complete!" message
+                st.rerun() 
+                return # Stop after this
+            # --- END OF FIX ---
+
             # Auto-save if enabled
             if st.session_state.auto_save:
                 self.auto_save_progress()
@@ -533,18 +525,18 @@ class DisasterResponseDashboard:
         col1, col2 = st.columns(2)
         
         with col1:
-            if st.button("⏸️ Pause", width='stretch'):
+            if st.button("⏸️ Pause", use_container_width=True):
                 st.session_state.simulation_running = False
                 st.success("Simulation paused")
             
-            if st.button("💾 Save", width='stretch'):
+            if st.button("💾 Save", use_container_width=True):
                 self.save_simulation_state()
         
         with col2:
-            if st.button("🔄 Step", width='stretch'):
+            if st.button("🔄 Step", use_container_width=True):
                 self.advance_simulation()
             
-            if st.button("📷 Screenshot", width='stretch'):
+            if st.button("📷 Screenshot", use_container_width=True):
                 self.take_screenshot()
     
     def render_realtime_metrics(self):
@@ -594,7 +586,7 @@ class DisasterResponseDashboard:
                 fig = px.area(df, x='step', y='rescues', 
                              title="Civilians Rescued Over Time",
                              labels={'step': 'Simulation Step', 'rescues': 'Civilians Rescued'})
-                st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, use_container_width=True)
         
         with col2:
             # Efficiency trend
@@ -602,7 +594,7 @@ class DisasterResponseDashboard:
                 fig = px.line(df, x='step', y='efficiency',
                              title="Operational Efficiency Trend",
                              labels={'step': 'Simulation Step', 'efficiency': 'Efficiency Score'})
-                st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, use_container_width=True)
         
         # Additional analytics
         col3, col4 = st.columns(2)
@@ -613,7 +605,7 @@ class DisasterResponseDashboard:
                 fig = px.line(df, x='step', y='rescue_rate',
                              title="Rescue Rate Progression",
                              labels={'step': 'Simulation Step', 'rescue_rate': 'Rescue Rate (%)'})
-                st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, use_container_width=True)
         
         with col4:
             # Performance summary
@@ -660,7 +652,7 @@ class DisasterResponseDashboard:
                 })
                 fig = px.pie(df_types, values='Count', names='Agent Type', 
                             title="Agent Type Distribution")
-                st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, use_container_width=True)
             
             with col2:
                 if agent_activities:
@@ -670,7 +662,7 @@ class DisasterResponseDashboard:
                     })
                     fig = px.bar(df_activities, x='Agent', y='Activity',
                                 title="Agent Activity Levels")
-                    st.plotly_chart(fig, width='stretch')
+                    st.plotly_chart(fig, use_container_width=True)
         
         # Agent details table
         st.subheader("Agent Details")

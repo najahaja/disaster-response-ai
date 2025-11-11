@@ -25,20 +25,20 @@ class SimulationViewer:
             st.error(f"Error updating frame: {e}")
             self.current_frame = None
     
-    def render(self):
+    def render(self,image_placeholder):
         """Render the simulation viewer"""
         if self.current_frame:
             # Display the current frame
-            st.image(self.current_frame, width='stretch', 
+            image_placeholder.image(self.current_frame, width='stretch', 
                     caption="Live Simulation View")
         else:
             # Placeholder when no frame available
-            st.info("🎮 Simulation visualization will appear here when running")
+            image_placeholder.info("🎮 Simulation visualization will appear here when running")
             
             # Show sample grid
-            self.render_sample_grid()
+            self.render_sample_grid(image_placeholder)
     
-    def render_sample_grid(self):
+    def render_sample_grid(self,image_placeholder):
         """Render a sample grid for demonstration"""
         # Create a sample grid visualization
         grid_size = 15
@@ -72,7 +72,7 @@ class SimulationViewer:
         img = Image.fromarray(sample_grid, 'RGB')
         img = img.resize((grid_size * cell_size, grid_size * cell_size), Image.Resampling.NEAREST)
         
-        st.image(img, width='stretch', caption="Sample Environment Layout")
+        image_placeholder.image(img, width='stretch', caption="Sample Environment Layout")
 
     def create_simulation_plot(self, environment):
         """Create a Plotly visualization of the simulation - FIXED COLORSCALE"""

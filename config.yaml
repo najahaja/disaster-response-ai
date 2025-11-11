@@ -2,14 +2,16 @@ environment:
   grid_size: 15
   cell_size: 40
   max_steps: 1000
-  
+
+  # --- FIX 1: Merged into ONE block ---
   cell_types:
-    ROAD: 0
-    BUILDING: 1
+    BUILDING: 0
+    ROAD: 1
     HOSPITAL: 2
-    COLLAPSED: 3
-    BLOCKED: 4
-    CIVILIAN: 5
+    OPEN_SPACE: 3
+    COLLAPSED: 4
+    BLOCKED: 5
+    # CIVILIAN was removed (it's an object, not a tile)
 
 agents:
   drone:
@@ -17,13 +19,13 @@ agents:
     speed: 2
     capacity: 1
     color: [0, 191, 255]
-    
+
   ambulance:
-    count: 2  
+    count: 2
     speed: 1
     capacity: 5
     color: [255, 0, 0]
-    
+
   rescue_team:
     count: 1
     speed: 1
@@ -36,10 +38,12 @@ disaster:
   civilian_spawn_chance: 0.3
 
 visualization:
+  # --- FIX 2: Keys MUST be integers, matching cell_types ---
   colors:
-    ROAD: [200, 200, 200]
-    BUILDING: [139, 69, 19] 
-    HOSPITAL: [255, 255, 255]
-    COLLAPSED: [105, 105, 105]
-    BLOCKED: [255, 0, 0]
-    CIVILIAN: [255, 255, 0]
+    0: [139, 69, 19] # BUILDING
+    1: [200, 200, 200] # ROAD
+    2: [255, 255, 255] # HOSPITAL
+    3: [220, 220, 220] # OPEN_SPACE
+    4: [105, 105, 105] # COLLAPSED
+    5: [255, 0, 0] # BLOCKED
+    # The yellow CIVILIAN color is correctly handled in visualization.py

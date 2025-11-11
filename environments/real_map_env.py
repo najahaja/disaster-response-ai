@@ -1,3 +1,8 @@
+import osmnx as ox
+import geopandas as gpd
+from rasterio import features
+from rasterio.transform import from_bounds
+from shapely.geometry import box
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
@@ -66,33 +71,78 @@ class RealMapEnv(SimpleGridEnv):
         self._initialize_environment()
     
     def _initialize_environment(self):
-        """Initialize environment with real map or fallback to simple grid"""
+        """Initialize environment with a real map or fallback to generated grid"""
         print(f"🗺️  Loading map for {self.location_name or 'default location'}...")
-        
+
         if self.location_name:
             try:
-                # Try to load real map
-                map_loader = MapLoader()
-                self.map_data = map_loader.load_map_with_fallback(self.location_name)
-                
-                if self.map_data and hasattr(self.map_data, 'grid'):
-                    self.grid = self.map_data.grid
-                    self.grid_size = self.grid.shape[0]
-                    self.real_map_loaded = True
-                    print(f"✅ Real map loaded: {self.grid_size}x{self.grid_size} grid")
-                    
-                    # Update observation space for new grid size
-                    self.observation_space = spaces.Box(
-                        low=0, high=255, 
-                        shape=(self.grid_size, self.grid_size, 3),
-                        dtype=np.uint8
-                    )
-                    return
-                else:
-                    print("⚠️  Map data incomplete, using fallback")
+                # 1. Download geospatial data from OpenStreetMap
+                print(f"Downloading data for {self.location_name}...")
+
+                # Get the bounding box for the location
+                gdf = ox.geocode_to_gdf(self.location_name)
+                bbox = gdf.total_bounds
+
+                # Define what features we want
+                tags = {
+                    'building': True,
+                    'highway': True,
+                    'leisure': 'park',
+                    'amenity': 'hospital'
+                }
+
+                # Download the features
+                features_gdf = ox.features_from_bbox(bbox=bbox, tags=tags)
+
+                # Separate the features
+                buildings = features_gdf[features_gdf['building'].notnull()]
+                roads = features_gdf[features_gdf['highway'].notnull()]
+                hospitals = features_gdf[features_gdf['amenity'] == 'hospital']
+                parks = features_gdf[features_gdf['leisure'] == 'park']
+
+                print("✅ Data downloaded. Rasterizing map...")
+
+                # 2. Create an empty grid
+                # We fill with 'OPEN_SPACE' first, then add buildings, etc.
+                self.grid = np.full((self.grid_size, self.grid_size), 
+                                self.cell_types['OPEN_SPACE'])
+
+                # 3. Create a "transform" to map geometries to grid pixels
+                # This defines the boundaries of our grid
+                map_transform = from_bounds(bbox[0], bbox[1], bbox[2], bbox[3], 
+                                            self.grid_size, self.grid_size)
+
+                # 4. "Burn" the features onto the grid
+                # We create (geometry, value) pairs
+
+                # Burn buildings (as default 'BUILDING')
+                building_shapes = [(geom, self.cell_types['BUILDING']) for geom in buildings.geometry]
+                features.rasterize(shapes=building_shapes, fill=0, out=self.grid, 
+                                transform=map_transform, merge_alg='replace')
+
+                # Burn parks (overwrites buildings)
+                park_shapes = [(geom, self.cell_types['OPEN_SPACE']) for geom in parks.geometry]
+                features.rasterize(shapes=park_shapes, fill=0, out=self.grid, 
+                                transform=map_transform, merge_alg='replace')
+
+                # Burn roads (overwrites buildings and parks)
+                road_shapes = [(geom, self.cell_types['ROAD']) for geom in roads.geometry]
+                features.rasterize(shapes=road_shapes, fill=0, out=self.grid, 
+                                transform=map_transform, merge_alg='replace')
+
+                # Burn hospitals (overwrites everything else)
+                hospital_shapes = [(geom, self.cell_types['HOSPITAL']) for geom in hospitals.geometry]
+                features.rasterize(shapes=hospital_shapes, fill=0, out=self.grid, 
+                                transform=map_transform, merge_alg='replace')
+
+                self.real_map_loaded = True
+                print(f"✅ Real map loaded: {self.grid_size}x{self.grid_size} grid for {self.location_name}")
+                return
+
             except Exception as e:
-                print(f"⚠️  Failed to load real map: {e}")
-        
+                print(f"⚠️  Failed to load real map: {e}. Using fallback.")
+                # self.handle_error(f"MapLoad Error: {e}") # Log to dashboard
+
         # Fallback to simple grid
         print("🔄 Using enhanced generated grid as fallback")
         self._initialize_enhanced_grid()
@@ -289,29 +339,52 @@ class RealMapEnv(SimpleGridEnv):
             self._trigger_real_map_disaster()
         else:
             # Use standard disaster generation
-            self.grid, self.civilians, self.collapsed_buildings, self.blocked_roads = \
-                DisasterGenerator.generate_disaster(self.grid, self.config)
+            print("🚨 Triggering disaster on generated grid...")
+            self._trigger_real_map_disaster()
     
     def _trigger_real_map_disaster(self):
         """Trigger disaster on real map data"""
         print("🚨 Triggering disaster on real map...")
         
-        # Simulate building collapses in dense areas
+        # --- START OF FIX (Order is changed) ---
+
+        # 1. FIND all valid locations FIRST
         building_locations = np.argwhere(self.grid == self.cell_types['BUILDING'])
+        road_locations = np.argwhere(self.grid == self.cell_types['ROAD'])
+
+        # 2. GENERATE civilians and place them in buildings
+        #    (Do this *before* you collapse them)
+        print(f"Generating civilians... Found {len(building_locations)} building locations.")
+        num_civilians = self.config['environment'].get('num_civilians', 10)
+        
         if len(building_locations) > 0:
-            # Collapse random buildings
+            for _ in range(num_civilians):
+                # Pick a random valid building
+                idx = np.random.randint(len(building_locations))
+                y, x = building_locations[idx]
+                
+                # Add the civilian to the environment's list
+                self.civilians.append({
+                    'position': np.array([x, y]),
+                    'rescued': False,
+                    'injury_level': np.random.choice(['minor', 'major', 'critical'], p=[0.6, 0.3, 0.1])
+                })
+            print(f"✅ Added {num_civilians} civilians to the map.")
+        else:
+            print("⚠️ No building locations found to place civilians!")
+
+        # 3. NOW, simulate building collapses
+        if len(building_locations) > 0:
             num_collapses = min(10, len(building_locations) // 10)
             collapse_indices = np.random.choice(len(building_locations), num_collapses, replace=False)
             
             for idx in collapse_indices:
                 y, x = building_locations[idx]
                 self.collapsed_buildings.append((x, y))
-                # Mark as collapsed (use a different value if available)
                 if 'COLLAPSED' in self.cell_types:
                     self.grid[y, x] = self.cell_types['COLLAPSED']
         
-        # Block some roads
-        road_locations = np.argwhere(self.grid == self.cell_types['ROAD'])
+        # 4. NOW, block some roads
         if len(road_locations) > 0:
             num_blocked = min(5, len(road_locations) // 20)
             block_indices = np.random.choice(len(road_locations), num_blocked, replace=False)
@@ -319,21 +392,12 @@ class RealMapEnv(SimpleGridEnv):
             for idx in block_indices:
                 y, x = road_locations[idx]
                 self.blocked_roads.append((x, y))
-                # Mark as blocked (use a different value if available)
                 if 'BLOCKED' in self.cell_types:
                     self.grid[y, x] = self.cell_types['BLOCKED']
-        
-        # Generate civilians in buildings
-        num_civilians = self.config['environment'].get('num_civilians', 10)
-        for _ in range(num_civilians):
-            if len(building_locations) > 0:
-                idx = np.random.randint(len(building_locations))
-                y, x = building_locations[idx]
-                self.civilians.append({
-                    'position': np.array([x, y]),
-                    'rescued': False,
-                    'injury_level': np.random.choice(['minor', 'major', 'critical'], p=[0.6, 0.3, 0.1])
-                })
+            
+        # --- END OF FIX ---
+            
+       
     
     def get_map_info(self):
         """Get information about the current map"""
