@@ -2,7 +2,7 @@ import osmnx as ox
 import geopandas as gpd
 from rasterio import features
 from rasterio.transform import from_bounds
-from shapely.geometry import box
+from shapely.geometry import box, mapping
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
@@ -10,6 +10,7 @@ import pygame
 import yaml
 import sys
 import os
+import traceback
 from typing import Dict, List, Optional, Any
 
 # Add project root to path
@@ -80,8 +81,16 @@ class RealMapEnv(SimpleGridEnv):
                 print(f"Downloading data for {self.location_name}...")
 
                 # Get the bounding box for the location
-                gdf = ox.geocode_to_gdf(self.location_name)
-                bbox = gdf.total_bounds
+                try:
+                    gdf = ox.geocode_to_gdf(self.location_name)
+                    bbox = gdf.total_bounds
+                except (TypeError, ValueError):
+                    print(f"⚠️ Could not get polygon for {self.location_name}, falling back to point-based bbox...")
+                    lat, lon = ox.geocode(self.location_name)
+                    # Create a ~2km x 2km bbox (0.01 degrees is roughly 1.1km)
+                    north, south = lat + 0.01, lat - 0.01
+                    east, west = lon + 0.01, lon - 0.01
+                    bbox = (west, south, east, north)
 
                 # Define what features we want
                 tags = {
@@ -105,7 +114,7 @@ class RealMapEnv(SimpleGridEnv):
                 # 2. Create an empty grid
                 # We fill with 'OPEN_SPACE' first, then add buildings, etc.
                 self.grid = np.full((self.grid_size, self.grid_size), 
-                                self.cell_types['OPEN_SPACE'])
+                                self.cell_types['OPEN_SPACE'], dtype=np.uint8)
 
                 # 3. Create a "transform" to map geometries to grid pixels
                 # This defines the boundaries of our grid
@@ -113,27 +122,27 @@ class RealMapEnv(SimpleGridEnv):
                                             self.grid_size, self.grid_size)
 
                 # 4. "Burn" the features onto the grid
-                # We create (geometry, value) pairs
+                # We create (geometry, value) pairs using mapping() to ensure rasterio compatibility
 
                 # Burn buildings (as default 'BUILDING')
-                building_shapes = [(geom, self.cell_types['BUILDING']) for geom in buildings.geometry]
+                building_shapes = [(mapping(geom), int(self.cell_types['BUILDING'])) for geom in buildings.geometry]
                 features.rasterize(shapes=building_shapes, fill=0, out=self.grid, 
-                                transform=map_transform, merge_alg='replace')
+                                transform=map_transform, all_touched=True)
 
                 # Burn parks (overwrites buildings)
-                park_shapes = [(geom, self.cell_types['OPEN_SPACE']) for geom in parks.geometry]
+                park_shapes = [(mapping(geom), int(self.cell_types['OPEN_SPACE'])) for geom in parks.geometry]
                 features.rasterize(shapes=park_shapes, fill=0, out=self.grid, 
-                                transform=map_transform, merge_alg='replace')
+                                transform=map_transform, all_touched=True)
 
                 # Burn roads (overwrites buildings and parks)
-                road_shapes = [(geom, self.cell_types['ROAD']) for geom in roads.geometry]
+                road_shapes = [(mapping(geom), int(self.cell_types['ROAD'])) for geom in roads.geometry]
                 features.rasterize(shapes=road_shapes, fill=0, out=self.grid, 
-                                transform=map_transform, merge_alg='replace')
+                                transform=map_transform, all_touched=True)
 
                 # Burn hospitals (overwrites everything else)
-                hospital_shapes = [(geom, self.cell_types['HOSPITAL']) for geom in hospitals.geometry]
+                hospital_shapes = [(mapping(geom), int(self.cell_types['HOSPITAL'])) for geom in hospitals.geometry]
                 features.rasterize(shapes=hospital_shapes, fill=0, out=self.grid, 
-                                transform=map_transform, merge_alg='replace')
+                                transform=map_transform, all_touched=True)
 
                 self.real_map_loaded = True
                 print(f"✅ Real map loaded: {self.grid_size}x{self.grid_size} grid for {self.location_name}")
@@ -141,6 +150,7 @@ class RealMapEnv(SimpleGridEnv):
 
             except Exception as e:
                 print(f"⚠️  Failed to load real map: {e}. Using fallback.")
+                traceback.print_exc()
                 # self.handle_error(f"MapLoad Error: {e}") # Log to dashboard
 
         # Fallback to simple grid
@@ -201,61 +211,6 @@ class RealMapEnv(SimpleGridEnv):
             for dy in range(-2, 3):
                 for dx in range(-2, 3):
                     y, x = center[0] + dy, center[1] + dx
-                    if (0 <= y < self.grid_size and 0 <= x < self.grid_size and 
-                        abs(dy) + abs(dx) <= 3):  # Diamond shape
-                        self.grid[y, x] = self.cell_types['OPEN_SPACE']
-        
-        # Add some water features
-        if self.grid_size > 15:
-            for i in range(3):
-                y = self.grid_size - 4 - i
-                x_start = self.grid_size // 3
-                x_end = 2 * self.grid_size // 3
-                self.grid[y, x_start:x_end] = self.cell_types['WATER']
-    
-    def initialize_pygame(self):
-        """Initialize PyGame for visualization - FORCED HEADLESS for Streamlit"""
-        pygame.init()
-        
-        # We are using this with Streamlit, so we force headless mode
-        # by not calling pygame.display.set_mode()
-        width = self.grid_size * self.cell_size + 200
-        height = self.grid_size * self.cell_size
-        self.small_font = pygame.font.Font(None, 20)
-        # This creates a "virtual" screen (a Surface) that doesn't open a window
-        self.screen = pygame.Surface((width, height)) 
-        self.font = pygame.font.Font(None, 24)
-        self.display_available = False # Set to False so pygame.display.flip() is never called
-        
-        print("✅ RealMapEnv PyGame initialized in headless mode for Streamlit.")
-    
-    def reset(self,*, seed=None, options=None):
-        """Reset the environment"""
-        super().reset(seed=seed)
-        
-        self.step_count = 0
-        self.disaster_triggered = False
-        self.agents = {}
-        self.civilians = []
-        self.collapsed_buildings = []
-        self.blocked_roads = []
-        
-        # Reinitialize environment
-        self._initialize_environment()
-        
-        observation = self._get_gym_observation()
-        info = {
-            'real_map_loaded': self.real_map_loaded,
-            'location': self.location_name,
-            'grid_size': self.grid_size
-        }
-        
-        return observation, info
-    
-    def render(self):
-        """Render the current state using PyGame and RETURN the surface"""
-        
-        self.screen.fill((0, 0, 0))  # Clear screen
         
         # Draw grid
         VisualizationUtils.draw_grid(self.screen, self.grid, self.colors, self.cell_size)
@@ -346,8 +301,6 @@ class RealMapEnv(SimpleGridEnv):
         """Trigger disaster on real map data"""
         print("🚨 Triggering disaster on real map...")
         
-        # --- START OF FIX (Order is changed) ---
-
         # 1. FIND all valid locations FIRST
         building_locations = np.argwhere(self.grid == self.cell_types['BUILDING'])
         road_locations = np.argwhere(self.grid == self.cell_types['ROAD'])
@@ -395,10 +348,6 @@ class RealMapEnv(SimpleGridEnv):
                 if 'BLOCKED' in self.cell_types:
                     self.grid[y, x] = self.cell_types['BLOCKED']
             
-        # --- END OF FIX ---
-            
-       
-    
     def get_map_info(self):
         """Get information about the current map"""
         return {
@@ -439,6 +388,8 @@ def test_real_map_env():
         
     except Exception as e:
         print(f"❌ RealMapEnv test failed: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 if __name__ == "__main__":

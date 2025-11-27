@@ -1,6 +1,6 @@
 environment:
-  grid_size: 15
-  cell_size: 40
+  grid_size: 45
+  cell_size: 20
   max_steps: 1000
 
   # --- FIX 1: Merged into ONE block ---
@@ -38,12 +38,10 @@ disaster:
   civilian_spawn_chance: 0.3
 
 visualization:
-  # --- FIX 2: Keys MUST be integers, matching cell_types ---
   colors:
-    0: [139, 69, 19] # BUILDING
-    1: [200, 200, 200] # ROAD
-    2: [255, 255, 255] # HOSPITAL
-    3: [220, 220, 220] # OPEN_SPACE
-    4: [105, 105, 105] # COLLAPSED
-    5: [255, 0, 0] # BLOCKED
-    # The yellow CIVILIAN color is correctly handled in visualization.py
+    0: [160, 82, 45] # BUILDING (Sienna Brown)
+    1: [50, 50, 50] # ROAD (Dark Grey/Black - easier to see)
+    2: [255, 255, 255] # HOSPITAL (Bright White)
+    3: [210, 240, 210] # OPEN_SPACE (Very Light Green - looks like land)
+    4: [255, 69, 0] # COLLAPSED (Red-Orange)
+    5: [128, 0, 0] # BLOCKED (Dark Red)

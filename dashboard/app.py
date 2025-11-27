@@ -71,48 +71,76 @@ class DisasterResponseDashboard:
         # Enhanced Custom CSS
         st.markdown("""
         <style>
+        /* Global Styles */
+        .stApp {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            font-family: 'Inter', sans-serif;
+        }
+        
+        /* Header Styling */
         .main-header {
-            font-size: 3rem;
-            color: #ff4b4b;
-            text-align: center;
-            margin-bottom: 2rem;
-            background: linear-gradient(45deg, #ff4b4b, #ff6b6b);
+            font-size: 3.5rem;
+            background: linear-gradient(120deg, #ff6b6b, #556270);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            font-weight: bold;
+            text-align: center;
+            font-weight: 800;
+            margin-bottom: 2rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+            letter-spacing: -1px;
         }
+        
+        /* Card Styling */
         .metric-card {
-            background-color: #f8f9fa;
-            padding: 1.2rem;
-            border-radius: 12px;
-            border-left: 6px solid #ff4b4b;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            padding: 1.5rem;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
             margin-bottom: 1rem;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
-        .success-metric {
-            border-left: 6px solid #00cc96;
+        
+        .metric-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.25);
         }
-        .warning-metric {
-            border-left: 6px solid #ffa726;
-        }
-        .danger-metric {
-            border-left: 6px solid #ff4b4b;
-        }
-        .info-metric {
-            border-left: 6px solid #1f77b4;
-        }
+        
+        /* Metric Borders */
+        .success-metric { border-left: 5px solid #00b894; }
+        .warning-metric { border-left: 5px solid #fdcb6e; }
+        .danger-metric { border-left: 5px solid #ff7675; }
+        .info-metric { border-left: 5px solid #0984e3; }
+        
+        /* Button Styling */
         .stButton button {
             width: 100%;
-            border-radius: 8px;
-            font-weight: bold;
+            border-radius: 12px;
+            font-weight: 600;
+            padding: 0.5rem 1rem;
             transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
+        
         .stButton button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            box-shadow: 0 7px 14px rgba(0,0,0,0.15);
         }
-        .sidebar .sidebar-content {
-            background-color: #f0f2f6;
+        
+        /* Sidebar Styling */
+        section[data-testid="stSidebar"] {
+            background-color: #ffffff;
+            border-right: 1px solid #e0e0e0;
+        }
+        
+        /* Headings */
+        h1, h2, h3 {
+            color: #2d3436;
+            font-weight: 700;
         }
         </style>
         """, unsafe_allow_html=True)
@@ -142,7 +170,7 @@ class DisasterResponseDashboard:
         for key, value in default_state.items():
             if key not in st.session_state:
                 st.session_state[key] = value
-    
+
     def initialize_components(self):
         """Initialize dashboard components with error handling"""
         try:
@@ -388,51 +416,47 @@ class DisasterResponseDashboard:
             self.render_enhanced_agent_view()
         
         with tab4:
-            self.render_simulation_logs()
-    
-    def render_enhanced_simulation_view(self):
-        """Render enhanced simulation visualization"""
-        col1, col2 = st.columns([2, 1])
-        
-        with col1:
-            st.subheader("🎯 Live Simulation View")
-            
-            # --- START OF FIX ---
-            # 1. Create the placeholder ONCE, before the 'if'
-            image_placeholder = st.empty()
-            
-            if st.session_state.environment:
-                try:
-                    env = st.session_state.environment
-                    
-                    # 2. Get the Pygame surface from the environment
-                    pygame_surface = env.render()
-                    
-                    if pygame_surface is not None:
-                        # 3. Update the viewer's frame with the new image
-                        self.simulation_viewer.update_frame(pygame_surface)
-                    
-                    # 4. Tell the viewer to render itself *inside* the placeholder
-                    #    (This assumes your simulation_viewer.py is also fixed)
-                    self.simulation_viewer.render(image_placeholder)
-                    
-                    # 5. Auto-advance simulation if running
-                    if st.session_state.simulation_running:
-                        self.advance_simulation()
-                        
-                except Exception as e:
-                    self.handle_error(f"Visualization error: {e}")
-                    st.error("❌ Failed to render simulation view")
-            else:
-                st.info("No active simulation. Start one from the sidebar.")
-                # Render the placeholder even if not running
-                self.simulation_viewer.render(image_placeholder)
-            # --- END OF FIX ---
+            self.render_realtime_metrics()
 
-        with col2:
+    @st.fragment
+    def render_enhanced_simulation_view(self):
+        """Render the live simulation (full‑width map + controls below)."""
+
+        # ---------- MAP ----------
+        st.subheader("🎯 Live Simulation View")
+        image_placeholder = st.empty()
+
+        if st.session_state.environment:
+            try:
+                env = st.session_state.environment
+                pygame_surface = env.render()
+                if pygame_surface is not None:
+                    self.simulation_viewer.update_frame(pygame_surface)
+
+                # Show the latest frame
+                self.simulation_viewer.render(image_placeholder)
+
+                # Advance the simulation *and* trigger a rerun so the next frame appears
+                if st.session_state.simulation_running:
+                    self.advance_simulation()
+                    st.rerun()          # <-- crucial line
+            except Exception as e:
+                self.handle_error(f"Visualization error: {e}")
+                st.error("❌ Failed to render simulation view")
+        else:
+            st.info("No active simulation. Start one from the sidebar.")
+            self.simulation_viewer.render(image_placeholder)
+
+        # ---------- CONTROLS & METRICS ----------
+        st.divider()
+        col1, col2 = st.columns(2)
+
+        with col1:
             st.subheader("🚨 Immediate Actions")
             self.render_quick_actions()
-            st.subheader("📊 Real-time Metrics")
+
+        with col2:
+            st.subheader("📊 Real‑time Metrics")
             self.render_realtime_metrics()
     
     def advance_simulation(self):
@@ -454,46 +478,7 @@ class DisasterResponseDashboard:
             # Execute step and GET THE RETURN VALUES
             obs, reward, terminated, truncated, info = env.step(actions)
             
-            # Update metrics
-            self.update_simulation_data()
-            
-            # --- THIS IS THE FIX ---
-            # Check if the simulation is over
-            if terminated or truncated:
-                st.session_state.simulation_running = False
-                st.balloons()
-                st.success("Simulation Complete!")
-                # We must re-run one last time to show the "Complete!" message
-                st.rerun() 
-                return # Stop after this
-            # --- END OF FIX ---
-
-            # Auto-save if enabled
-            if st.session_state.auto_save:
-                self.auto_save_progress()
-            
-            # Add small delay for visualization
-            time.sleep(1.0 / st.session_state.simulation_speed)
-            
-            # Trigger rerun for real-time updates
-            st.rerun()
-            
-        except Exception as e:
-            self.handle_error(f"Simulation advance error: {e}")
-            st.session_state.simulation_running = False
-    
-    def update_simulation_data(self):
-        """Update simulation data with comprehensive metrics"""
-        if not st.session_state.environment:
-            return
-            
-        env = st.session_state.environment
-        
-        try:
-            # Ensure civilians is a list
-            if not isinstance(env.civilians, list):
-                env.civilians = []
-            
+            # Calculate metrics
             rescued = sum(1 for c in env.civilians if c.get('rescued', False))
             total_civilians = len(env.civilians)
             rescue_rate = (rescued / total_civilians * 100) if total_civilians > 0 else 0
@@ -513,12 +498,28 @@ class DisasterResponseDashboard:
             st.session_state.simulation_data['steps'].append(current_data)
             st.session_state.simulation_data['civilian_rescues'] = rescued
             
-            # Keep only last 1000 data points for performance
-            if len(st.session_state.simulation_data['steps']) > 1000:
-                st.session_state.simulation_data['steps'] = st.session_state.simulation_data['steps'][-1000:]
+            # Check if the simulation is over
+            if terminated or truncated:
+                st.session_state.simulation_running = False
+                st.balloons()
+                st.success("Simulation Complete!")
+                time.sleep(2) # Give time to see the message
+                st.rerun()
+                return
+
+            # Auto-save if enabled
+            if st.session_state.auto_save:
+                self.auto_save_progress()
+            
+            # Add small delay for visualization
+            time.sleep(1.0 / st.session_state.simulation_speed)
+            
+            # Trigger rerun for real-time updates
+            # st.rerun() # REMOVED to prevent full page blinking, handled by fragment
                 
         except Exception as e:
-            self.handle_error(f"Data update error: {e}")
+            self.handle_error(f"Simulation advance error: {e}")
+            st.session_state.simulation_running = False
     
     def render_quick_actions(self):
         """Render quick action buttons"""
@@ -678,7 +679,7 @@ class DisasterResponseDashboard:
             })
         
         if agent_data:
-            st.dataframe(pd.DataFrame(agent_data), width='stretch')
+            st.dataframe(pd.DataFrame(agent_data), use_container_width=True)
     
     def render_simulation_logs(self):
         """Render simulation logs and error tracking"""
@@ -698,7 +699,7 @@ class DisasterResponseDashboard:
         st.subheader("📈 Performance Logs")
         if st.session_state.simulation_data['steps']:
             df = pd.DataFrame(st.session_state.simulation_data['steps'])
-            st.dataframe(df.tail(10), width='stretch')  # Show last 10 steps
+            st.dataframe(df.tail(10), use_container_width=True)  # Show last 10 steps
         else:
             st.info("No performance data yet")
     

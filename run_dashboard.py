@@ -22,4 +22,15 @@ def main():
         st.info("Please make sure all dependencies are installed and the project structure is correct.")
 
 if __name__ == "__main__":
-    main()
+    try:
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+        if get_script_run_ctx():
+            main()
+        else:
+            import sys
+            from streamlit.web import cli as stcli
+            sys.argv = ["streamlit", "run", sys.argv[0]]
+            sys.exit(stcli.main())
+    except ImportError:
+        # Fallback for older versions or if something goes wrong
+        main()
