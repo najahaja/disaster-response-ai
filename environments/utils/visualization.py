@@ -66,7 +66,7 @@ class VisualizationUtils:
         y_offset = 10
         # Step count
         step_text = font.render(f"Step: {step_count}", True, (255, 255, 255))
-        screen.blit(step_text, (panel_x + 10, y_offset))
+        screen.blit(step_text, (panel_x +10, y_offset))
         y_offset += 30
         
         # Agent info
@@ -75,9 +75,9 @@ class VisualizationUtils:
         y_offset += 25
         
         for agent_id, agent in agents.items():
-            agent_info = f"{agent_id}: {agent.civilians_rescued} rescued"
+            agent_info = f"{agent_id}: {agent.civilians_rescued}"
             text = font.render(agent_info, True, (200, 200, 200))
-            screen.blit(text, (panel_x + 20, y_offset))
+            screen.blit(text, (panel_x + 10, y_offset))
             y_offset += 20
         
         y_offset += 10

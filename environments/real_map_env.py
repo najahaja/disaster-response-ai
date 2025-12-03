@@ -230,12 +230,12 @@ class RealMapEnv(SimpleGridEnv):
     
     def _draw_real_map_info(self):
         """Draw real map information panel"""
-        panel_x = self.grid_size * self.cell_size + 10
-        panel_width = 280
+        panel_x = self.grid_size * self.cell_size
+        panel_width = 220
         
         # Draw panel background
         pygame.draw.rect(self.screen, (40, 40, 40), 
-                        (panel_x, 0, panel_width, self.grid_size * self.cell_size))
+                         (panel_x, 0, panel_width, self.screen.get_height()))
         
         # Draw title
         title_text = "REAL MAP INFO" if self.real_map_loaded else "GENERATED MAP"

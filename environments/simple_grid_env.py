@@ -91,12 +91,12 @@ class SimpleGridEnv(gym.Env):
         
         # We are using this with Streamlit, so we force headless mode
         # by not calling pygame.display.set_mode()
-        width = self.grid_size * self.cell_size + 200
-        height = self.grid_size * self.cell_size
+        width = self.grid_size * self.cell_size + 220
+        height = self.grid_size * self.cell_size + 10
         
         # This creates a "virtual" screen (a Surface) that doesn't open a window
         self.screen = pygame.Surface((width, height)) 
-        self.font = pygame.font.Font(None, 24)
+        self.font = pygame.font.Font(None, 20)
         self.display_available = False # Set to False so pygame.display.flip() is never called
         
         # We can still "print" that the GUI is (virtually) available for our app

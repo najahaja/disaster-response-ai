@@ -3,7 +3,7 @@
 Enhanced Main Dashboard Application for Disaster Response AI - Week 6
 Streamlit-based dashboard with improved performance, error handling, and new features
 """
-
+from stable_baselines3 import PPO
 import streamlit as st
 import sys
 import os
@@ -465,20 +465,80 @@ class DisasterResponseDashboard:
             env = st.session_state.environment
             if not env:
                 return
-            
-            # Generate actions for all agents
+
+            # --- AI Model Loading ---
+            # We load this once per session to save time
+            if 'ai_model' not in st.session_state:
+                try:
+                    from stable_baselines3 import PPO 
+                    st.session_state['ai_model'] = PPO.load("models/disaster_response_model")
+                except Exception as e:
+                    st.warning(f"Could not load AI model: {e}. Using Random Agent.")
+                    st.session_state['ai_model'] = None
+
+            model = st.session_state['ai_model']
+            use_ai = (model is not None)
+
+            # --- Action Selection ---
             actions = {}
-            for agent_id, agent in env.agents.items():
-                # We use (int, np.integer) to be safe
-                if isinstance(env.action_space.sample(), (int, np.integer)):
-                     actions[agent_id] = env.action_space.sample()
-                else:
-                     actions[agent_id] = 0 # Default to 'UP'
+            # Get observation ONCE for all agents
+            obs = env._get_gym_observation()
             
-            # Execute step and GET THE RETURN VALUES
+            for agent_id, agent in env.agents.items():
+                if use_ai:
+                    try:
+                        # Predict action
+                        action, _ = model.predict(obs, deterministic=True)
+                        actions[agent_id] = int(action)
+                    except Exception as e:
+                        # If prediction fails (e.g. size mismatch), fallback to random and warn
+                        print(f"AI Prediction Error: {e}")
+                        actions[agent_id] = env.action_space.sample()
+                else:
+                    actions[agent_id] = env.action_space.sample()
+            
+            # --- Step the Environment ---
             obs, reward, terminated, truncated, info = env.step(actions)
             
-            # Calculate metrics
+            # --- Update Data ---
+            self.update_simulation_data()
+            
+            # --- Check Termination ---
+            if terminated or truncated:
+                st.session_state.simulation_running = False
+                st.balloons()
+                st.success("Simulation Complete!")
+                time.sleep(3)
+                st.rerun()
+                return
+
+            # --- Auto-save & Delay ---
+            if st.session_state.auto_save:
+                self.auto_save_progress()
+            
+            time.sleep(1.0 / st.session_state.simulation_speed)
+            
+            # --- CRITICAL: FORCE RERUN ---
+            st.rerun()
+            
+        except Exception as e:
+            print("CRITICAL SIMULATION ERROR:")
+            print(traceback.format_exc())
+            # This catches any other crashes and shows them
+            st.error(f"💥 Simulation Crashed: {e}")
+            st.session_state.simulation_running = False
+    def update_simulation_data(self):
+        """Update simulation data with comprehensive metrics"""
+        if not st.session_state.environment:
+            return
+            
+        env = st.session_state.environment
+        
+        try:
+            # Ensure civilians is a list
+            if not isinstance(env.civilians, list):
+                env.civilians = []
+            
             rescued = sum(1 for c in env.civilians if c.get('rescued', False))
             total_civilians = len(env.civilians)
             rescue_rate = (rescued / total_civilians * 100) if total_civilians > 0 else 0
@@ -498,29 +558,12 @@ class DisasterResponseDashboard:
             st.session_state.simulation_data['steps'].append(current_data)
             st.session_state.simulation_data['civilian_rescues'] = rescued
             
-            # Check if the simulation is over
-            if terminated or truncated:
-                st.session_state.simulation_running = False
-                st.balloons()
-                st.success("Simulation Complete!")
-                time.sleep(2) # Give time to see the message
-                st.rerun()
-                return
-
-            # Auto-save if enabled
-            if st.session_state.auto_save:
-                self.auto_save_progress()
-            
-            # Add small delay for visualization
-            time.sleep(1.0 / st.session_state.simulation_speed)
-            
-            # Trigger rerun for real-time updates
-            # st.rerun() # REMOVED to prevent full page blinking, handled by fragment
+            # Keep only last 1000 data points for performance
+            if len(st.session_state.simulation_data['steps']) > 1000:
+                st.session_state.simulation_data['steps'] = st.session_state.simulation_data['steps'][-1000:]
                 
         except Exception as e:
-            self.handle_error(f"Simulation advance error: {e}")
-            st.session_state.simulation_running = False
-    
+            self.handle_error(f"Data update error: {e}")
     def render_quick_actions(self):
         """Render quick action buttons"""
         col1, col2 = st.columns(2)
@@ -702,7 +745,23 @@ class DisasterResponseDashboard:
             st.dataframe(df.tail(10), use_container_width=True)  # Show last 10 steps
         else:
             st.info("No performance data yet")
-    
+    # Add this inside the class
+    @st.cache_resource
+    def load_ai_model(self):
+        """Load the trained AI model (Cached for performance)"""
+        model_path = "models/disaster_response_model" # It automatically adds .zip
+        
+        if os.path.exists(model_path + ".zip"):
+            try:
+                model = PPO.load(model_path)
+                logger.info("✅ AI Model loaded successfully!")
+                return model
+            except Exception as e:
+                logger.error(f"Failed to load model: {e}")
+                return None
+        else:
+            logger.warning("⚠️ Model file not found. Using random actions.")
+            return None
     def start_simulation(self, location, num_drones, num_ambulances, num_rescue_teams, auto_deploy=True):
         """Start a new simulation with enhanced error handling"""
         try:
