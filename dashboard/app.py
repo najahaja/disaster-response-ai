@@ -418,7 +418,7 @@ class DisasterResponseDashboard:
         with tab4:
             self.render_realtime_metrics()
 
-    @st.fragment
+    # @st.fragment
     def render_enhanced_simulation_view(self):
         """Render the live simulation (full‑width map + controls below)."""
 
@@ -488,7 +488,7 @@ class DisasterResponseDashboard:
                 if use_ai:
                     try:
                         # Predict action
-                        action, _ = model.predict(obs, deterministic=True)
+                        action, _ = model.predict(obs, deterministic=False)
                         actions[agent_id] = int(action)
                     except Exception as e:
                         # If prediction fails (e.g. size mismatch), fallback to random and warn
@@ -816,24 +816,47 @@ class DisasterResponseDashboard:
             st.error(f"❌ {error_msg}")
     
     def calculate_optimal_positions(self, env, num_drones, num_ambulances, num_rescue_teams):
-        """Calculate optimal starting positions for agents"""
+        """Find valid ROAD/OPEN positions for agents so they don't get stuck in walls"""
         grid_size = env.grid_size
+        valid_spots = []
+        
+        # 1. Find all cells that are ROAD (1) or OPEN_SPACE (3)
+        # Check your config.yaml for exact IDs. Usually Road=1, Open=3.
+        for y in range(grid_size):
+            for x in range(grid_size):
+                cell_value = env.grid[y, x]
+                # Assuming 1=Road, 3=Open. Adjust if your config is different.
+                if cell_value == 1 or cell_value == 3: 
+                    valid_spots.append(np.array([x, y]))
+        
+        # If map is full of buildings, fallback to random
+        if not valid_spots:
+            valid_spots = [np.array([5, 5]) for _ in range(50)]
+            
+        import random
+        # Shuffle spots so agents don't pile up
+        random.shuffle(valid_spots)
+        
         positions = {
             'drones': [],
             'ambulances': [],
             'rescue_teams': []
         }
         
-        # Simple positioning logic - can be enhanced
-        for i in range(num_drones):
-            positions['drones'].append(np.array([2 + i, 2]))
-        
-        for i in range(num_ambulances):
-            positions['ambulances'].append(np.array([grid_size - 3, 3 + i]))
-        
-        for i in range(num_rescue_teams):
-            positions['rescue_teams'].append(np.array([5 + i, grid_size - 3]))
-        
+        # Assign spots (pop from list so no two agents share a spot if possible)
+        idx = 0
+        for _ in range(num_drones):
+            positions['drones'].append(valid_spots[idx % len(valid_spots)])
+            idx += 1
+            
+        for _ in range(num_ambulances):
+            positions['ambulances'].append(valid_spots[idx % len(valid_spots)])
+            idx += 1
+            
+        for _ in range(num_rescue_teams):
+            positions['rescue_teams'].append(valid_spots[idx % len(valid_spots)])
+            idx += 1
+            
         return positions
     
     def stop_simulation(self):
