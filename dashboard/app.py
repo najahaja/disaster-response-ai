@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Enhanced Main Dashboard Application for Disaster Response AI - Week 6
-Streamlit-based dashboard with improved performance, error handling, and new features
+Streamlit-based dashboard with login portal for admin and viewer roles
 """
 from stable_baselines3 import PPO
 import streamlit as st
@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 import time
 import logging
 import traceback
+import hashlib
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -49,12 +50,49 @@ except ImportError as e:
     # Create minimal fallbacks
     PYGAME_AVAILABLE = False
 
+class LoginSystem:
+    """Simple login system for admin and viewer roles"""
+    
+    def __init__(self):
+        # Predefined credentials (in production, use secure storage)
+        self.users = {
+            "admin": {
+                "password": self._hash_password("Admin@123"),
+                "role": "admin"
+            },
+            "viewer": {
+                "password": self._hash_password("Viewer@123"),
+                "role": "viewer"
+            }
+        }
+    
+    def _hash_password(self, password):
+        """Simple password hashing"""
+        return hashlib.sha256(password.encode()).hexdigest()
+    
+    def authenticate(self, username, password):
+        """Authenticate user"""
+        if username in self.users:
+            hashed_password = self._hash_password(password)
+            if self.users[username]["password"] == hashed_password:
+                return True, self.users[username]["role"]
+        return False, None
+    
+    def is_admin(self, role):
+        """Check if role is admin"""
+        return role == "admin"
+    
+    def is_viewer(self, role):
+        """Check if role is viewer"""
+        return role == "viewer"
+
 class DisasterResponseDashboard:
     """
     Enhanced dashboard class for Disaster Response AI simulation - Week 6
     """
     
     def __init__(self):
+        self.login_system = LoginSystem()
         self.setup_page()
         self.initialize_session_state()
         self.initialize_components()
@@ -88,6 +126,37 @@ class DisasterResponseDashboard:
             margin-bottom: 2rem;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
             letter-spacing: -1px;
+        }
+        
+        /* Login Form Styling */
+        .login-form { 
+        max-width: 500px; 
+        margin: 20px auto; 
+        padding: 1rem 2rem;
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 16px;
+        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+        text-align: center; }
+        
+
+        
+        .role-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+        
+        .admin-badge {
+            background-color: #ff6b6b;
+            color: white;
+        }
+        
+        .viewer-badge {
+            background-color: #0984e3;
+            color: white;
         }
         
         /* Card Styling */
@@ -131,6 +200,12 @@ class DisasterResponseDashboard:
             box-shadow: 0 7px 14px rgba(0,0,0,0.15);
         }
         
+        /* Disabled Button */
+        .stButton button:disabled {
+            background-color: #cccccc !important;
+            cursor: not-allowed;
+        }
+        
         /* Sidebar Styling */
         section[data-testid="stSidebar"] {
             background-color: #ffffff;
@@ -148,6 +223,9 @@ class DisasterResponseDashboard:
     def initialize_session_state(self):
         """Initialize session state variables with enhanced tracking"""
         default_state = {
+            'authenticated': False,
+            'username': None,
+            'user_role': None,
             'simulation_running': False,
             'environment': None,
             'simulation_data': {
@@ -182,41 +260,139 @@ class DisasterResponseDashboard:
             logger.error(f"Failed to initialize dashboard components: {e}")
             st.error("⚠️ Some dashboard features may be limited")
     
-    def render_header(self):
-        """Render enhanced dashboard header"""
-        st.markdown('<h1 class="main-header">🚨 Disaster Response AI Dashboard </h1>', 
-                   unsafe_allow_html=True)
+    def render_login(self):
+        """Render login form"""
+        st.markdown('<h1 class="main-header">🚨 Disaster Response AI Dashboard</h1>', 
+                unsafe_allow_html=True)
+
+        # Create 3 columns: Empty | Form | Empty
+        col_left, col_center, col_right = st.columns([1, 2, 1])
+
+        with col_center:
+            # Put everything inside this middle column
+            st.markdown("""
+            <div class="login-form">
+                <h3>🔐 Login Portal</h3>
+                <p>Please enter your credentials to access the dashboard</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+            with st.form("login_form"):
+                # Inputs for username and password
+                username = st.text_input("Username", placeholder="Enter username")
+                password = st.text_input("Password", type="password", placeholder="Enter password")
+                
+                # Create columns for buttons
+                col1, col2 = st.columns([1, 1])
+                with col1:
+                    submit_button = st.form_submit_button("Login", use_container_width=True)
+                with col2:
+                    demo_button = st.form_submit_button("View Demo", use_container_width=True)
+                
+                # Handle the actions when buttons are pressed
+            if submit_button:
+
+                if username and password:
+
+                    authenticated, role = self.login_system.authenticate(username, password)
+
+                    if authenticated:
+
+                        st.session_state.authenticated = True
+
+                        st.session_state.username = username
+
+                        st.session_state.user_role = role
+
+                        st.success(f"✅ Welcome {username}!")
+
+                        st.rerun()
+
+                    else:
+
+                        st.error("❌ Invalid username or password")
+
+                else:
+
+                    st.warning("⚠️ Please enter both username and password")
+
+           
+
+            if demo_button:
+
+                # Demo mode - auto login as viewer
+
+                authenticated, role = self.login_system.authenticate("viewer", "Viewer@123")
+
+                if authenticated:
+
+                    st.session_state.authenticated = True
+
+                    st.session_state.username = "viewer"
+
+                    st.session_state.user_role = "viewer"
+
+                    st.success("✅ Entering demo mode as viewer")
+
+                    st.rerun()
+
+            # Expandable Note Section
+            with st.expander("Note"):
+                st.markdown("""
+                Admin can trigger disasters and modify settings. Viewer can only view.
+                """)
+
         
-        # Enhanced status indicator with more metrics
-        col1, col2, col3, col4 = st.columns(4)
+        
+    
+    def render_header(self):
+        """Render enhanced dashboard header with user info"""
+        col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
         
         with col1:
-            status_icon = "🟢" if st.session_state.simulation_running else "🔴"
-            status_text = "Running" if st.session_state.simulation_running else "Stopped"
-            st.metric("Simulation Status", f"{status_icon} {status_text}")
+            st.markdown('<h1 class="main-header">🚨 Disaster Response AI Dashboard</h1>', 
+                       unsafe_allow_html=True)
         
         with col2:
-            if st.session_state.environment:
-                env_type = "Real Map" if hasattr(st.session_state.environment, 'real_map_loaded') and st.session_state.environment.real_map_loaded else "Generated"
-                st.metric("Environment", env_type)
+            if st.session_state.user_role == "admin":
+                role_badge = "admin"
+                badge_class = "admin-badge"
             else:
-                st.metric("Environment", "Not Loaded")
+                role_badge = "viewer"
+                badge_class = "viewer-badge"
+            
+            st.markdown(f"""
+            <div style="text-align: right;">
+                <div style="font-size: 1rem; color: #666;">Logged in as</div>
+                <div style="font-size: 1.2rem; font-weight: 600;">
+                    {st.session_state.username}
+                    <span class="role-badge {badge_class}">{role_badge}</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
         
         with col3:
-            civilian_count = st.session_state.simulation_data.get('civilian_rescues', 0)
-            st.metric("Civilians Rescued", f"{civilian_count} 🎯")
+            if st.button("👤 Logout", use_container_width=True):
+                st.session_state.authenticated = False
+                st.session_state.username = None
+                st.session_state.user_role = None
+                st.rerun()
         
         with col4:
-            if st.session_state.simulation_data['start_time']:
-                duration = datetime.now() - st.session_state.simulation_data['start_time']
-                st.metric("Run Time", f"{duration.total_seconds():.0f}s ⏱️")
-            else:
-                st.metric("Run Time", "0s ⏱️")
+            status_icon = "🟢" if st.session_state.simulation_running else "🔴"
+            status_text = "Running" if st.session_state.simulation_running else "Stopped"
+            st.metric("Status", f"{status_icon} {status_text}")
     
     def render_sidebar(self):
-        """Render enhanced sidebar with additional features"""
+        """Render enhanced sidebar with role-based permissions"""
         with st.sidebar:
             st.header("🎮 Simulation Controls")
+            
+            # Display user info in sidebar
+            st.markdown(f"""
+            **User:** {st.session_state.username}
+            **Role:** {st.session_state.user_role}
+            """)
             
             # Simulation Mode Selection
             st.subheader("🔧 Simulation Mode")
@@ -224,7 +400,8 @@ class DisasterResponseDashboard:
                 "Select Mode",
                 options=["Basic", "Advanced", "Training"],
                 index=0,
-                help="Basic: Simple simulation\nAdvanced: Full features\nTraining: ML training mode"
+                help="Basic: Simple simulation\nAdvanced: Full features\nTraining: ML training mode",
+                disabled=st.session_state.user_role == "viewer"  # Disable for viewer
             )
             st.session_state.simulation_mode = mode.lower()
             
@@ -241,7 +418,8 @@ class DisasterResponseDashboard:
             selected_location = st.selectbox(
                 "Select Location",
                 options=location_options,
-                index=0
+                index=0,
+                disabled=st.session_state.user_role == "viewer"  # Disable for viewer
             )
             
             # Enhanced Agent configuration
@@ -249,37 +427,52 @@ class DisasterResponseDashboard:
             col1, col2 = st.columns(2)
             with col1:
                 num_drones = st.slider("Drones 🛸", 1, 8, 2, 
-                                     help="Aerial reconnaissance units")
+                                     help="Aerial reconnaissance units",
+                                     disabled=st.session_state.user_role == "viewer")  # Disable for viewer
                 num_ambulances = st.slider("Ambulances 🚑", 1, 6, 2,
-                                         help="Medical transport units")
+                                         help="Medical transport units",
+                                         disabled=st.session_state.user_role == "viewer")  # Disable for viewer
             with col2:
                 num_rescue_teams = st.slider("Rescue Teams 👷", 1, 4, 1,
-                                           help="Ground rescue units")
+                                           help="Ground rescue units",
+                                           disabled=st.session_state.user_role == "viewer")  # Disable for viewer
                 auto_deploy = st.checkbox("Auto-deploy", value=True,
-                                        help="Automatically deploy agents at optimal positions")
+                                        help="Automatically deploy agents at optimal positions",
+                                        disabled=st.session_state.user_role == "viewer")  # Disable for viewer
             
             # Enhanced Simulation controls
             st.subheader("🎯 Simulation Control")
             
             control_col1, control_col2 = st.columns(2)
             with control_col1:
+                start_disabled = st.session_state.user_role == "viewer"
                 if st.button("🚀 Start Simulation", use_container_width=True, 
-                           help="Start new simulation with current configuration"):
+                           help="Start new simulation with current configuration",
+                           disabled=start_disabled):
                     self.start_simulation(selected_location, num_drones, num_ambulances, num_rescue_teams, auto_deploy)
             
             with control_col2:
+                stop_disabled = st.session_state.user_role == "viewer" or not st.session_state.simulation_running
                 if st.button("⏹️ Stop Simulation", use_container_width=True,
-                           help="Stop current simulation"):
+                           help="Stop current simulation",
+                           disabled=stop_disabled):
                     self.stop_simulation()
             
-            # Additional control buttons
-            if st.button("🚨 Trigger Disaster", use_container_width=True,
-                       help="Trigger disaster scenario in current simulation"):
-                self.trigger_disaster()
-            
-            if st.button("🔄 Reset Simulation", use_container_width=True,
-                       help="Reset simulation to initial state"):
-                self.reset_simulation()
+            # Additional control buttons - only for admin
+            if st.session_state.user_role == "admin":
+                if st.button("🚨 Trigger Disaster", use_container_width=True,
+                           help="Trigger disaster scenario in current simulation"):
+                    self.trigger_disaster()
+                
+                if st.button("🔄 Reset Simulation", use_container_width=True,
+                           help="Reset simulation to initial state"):
+                    self.reset_simulation()
+            else:
+                # For viewer, show disabled buttons or info
+                st.button("🚨 Trigger Disaster", use_container_width=True, disabled=True,
+                         help="Admin permission required")
+                st.button("🔄 Reset Simulation", use_container_width=True, disabled=True,
+                         help="Admin permission required")
             
             # Enhanced settings
             st.subheader("⚙️ Simulation Settings")
@@ -288,7 +481,8 @@ class DisasterResponseDashboard:
             st.session_state.simulation_speed = sim_speed
             
             auto_save = st.checkbox("Auto-save progress", value=True,
-                                  help="Automatically save simulation state")
+                                  help="Automatically save simulation state",
+                                  disabled=st.session_state.user_role == "viewer")  # Disable for viewer
             st.session_state.auto_save = auto_save
             
             # Real-time metrics in sidebar
@@ -340,23 +534,49 @@ class DisasterResponseDashboard:
     def render_enhanced_welcome_screen(self):
         """Render enhanced welcome screen"""
         st.markdown("""
-        ## 🌟 Welcome to Disaster Response AI Dashboard 
+        ## 🌟 Welcome to Disaster Response AI Dashboard
         
-        
+        ### Role Information:
         """)
         
-       
+        # Display role-specific information
+        if st.session_state.user_role == "admin":
+            st.success("""
+            **👑 Admin Privileges:**
+            - 🚀 Start/Stop simulations
+            - 🚨 Trigger disasters
+            - ⚙️ Modify all settings
+            - 🤖 Configure agents
+            - 📊 Full control over all features
+            """)
+        else:
+            st.info("""
+            **👁️ Viewer Privileges:**
+            - 👀 View simulations
+            - 📊 Monitor metrics
+            - 📈 Analyze performance
+            - ℹ️ Read-only access to all data
+            """)
         
         # Quick start guide
         with st.expander("🚀 Quick Start Guide", expanded=True):
-            st.markdown("""
-            1. **Select Simulation Mode** in sidebar
-            2. **Choose Location** (real map or generated)
-            3. **Configure Your Team** (drones, ambulances, rescue teams)
-            4. **Click 'Start Simulation'**
-            5. **Trigger Disaster** when ready
-            6. **Monitor Performance** in real-time
-            """)
+            if st.session_state.user_role == "admin":
+                st.markdown("""
+                1. **Select Simulation Mode** in sidebar
+                2. **Choose Location** (real map or generated)
+                3. **Configure Your Team** (drones, ambulances, rescue teams)
+                4. **Click 'Start Simulation'**
+                5. **Trigger Disaster** when ready
+                6. **Monitor Performance** in real-time
+                """)
+            else:
+                st.markdown("""
+                1. **Wait for Admin** to start simulation
+                2. **Observe Simulation** in real-time
+                3. **Monitor Metrics** in sidebar
+                4. **Analyze Performance** in analytics tab
+                5. **View Agent Activities** in agents tab
+                """)
         
         # Sample analytics
         st.subheader("📊 Sample Analytics Dashboard")
@@ -416,12 +636,14 @@ class DisasterResponseDashboard:
             self.render_enhanced_agent_view()
         
         with tab4:
-            self.render_realtime_metrics()
-
-    # @st.fragment
+            self.render_simulation_logs()
+    
     def render_enhanced_simulation_view(self):
         """Render the live simulation (full‑width map + controls below)."""
-
+        # Display role-based message
+        if st.session_state.user_role == "viewer":
+            st.info("👁️ **Viewer Mode**: You can observe the simulation in real-time. Admin controls are disabled.")
+        
         # ---------- MAP ----------
         st.subheader("🎯 Live Simulation View")
         image_placeholder = st.empty()
@@ -527,6 +749,7 @@ class DisasterResponseDashboard:
             # This catches any other crashes and shows them
             st.error(f"💥 Simulation Crashed: {e}")
             st.session_state.simulation_running = False
+    
     def update_simulation_data(self):
         """Update simulation data with comprehensive metrics"""
         if not st.session_state.environment:
@@ -564,20 +787,24 @@ class DisasterResponseDashboard:
                 
         except Exception as e:
             self.handle_error(f"Data update error: {e}")
+    
     def render_quick_actions(self):
-        """Render quick action buttons"""
+        """Render quick action buttons with role-based permissions"""
         col1, col2 = st.columns(2)
         
         with col1:
-            if st.button("⏸️ Pause", use_container_width=True):
+            pause_disabled = st.session_state.user_role == "viewer" or not st.session_state.simulation_running
+            if st.button("⏸️ Pause", use_container_width=True, disabled=pause_disabled):
                 st.session_state.simulation_running = False
                 st.success("Simulation paused")
             
-            if st.button("💾 Save", use_container_width=True):
+            save_disabled = st.session_state.user_role == "viewer"
+            if st.button("💾 Save", use_container_width=True, disabled=save_disabled):
                 self.save_simulation_state()
         
         with col2:
-            if st.button("🔄 Step", use_container_width=True):
+            step_disabled = st.session_state.user_role == "viewer" or not st.session_state.environment
+            if st.button("🔄 Step", use_container_width=True, disabled=step_disabled):
                 self.advance_simulation()
             
             if st.button("📷 Screenshot", use_container_width=True):
@@ -745,7 +972,7 @@ class DisasterResponseDashboard:
             st.dataframe(df.tail(10), use_container_width=True)  # Show last 10 steps
         else:
             st.info("No performance data yet")
-    # Add this inside the class
+    
     @st.cache_resource
     def load_ai_model(self):
         """Load the trained AI model (Cached for performance)"""
@@ -762,9 +989,15 @@ class DisasterResponseDashboard:
         else:
             logger.warning("⚠️ Model file not found. Using random actions.")
             return None
+    
     def start_simulation(self, location, num_drones, num_ambulances, num_rescue_teams, auto_deploy=True):
         """Start a new simulation with enhanced error handling"""
         try:
+            # Check if user has permission
+            if st.session_state.user_role != "admin":
+                st.error("❌ Admin permission required to start simulation")
+                return
+                
             logger.info(f"Starting simulation for {location} with {num_drones} drones, {num_ambulances} ambulances, {num_rescue_teams} rescue teams")
             
             # Create environment based on mode
@@ -862,6 +1095,11 @@ class DisasterResponseDashboard:
     def stop_simulation(self):
         """Stop the current simulation with proper cleanup"""
         try:
+            # Check if user has permission
+            if st.session_state.user_role != "admin":
+                st.error("❌ Admin permission required to stop simulation")
+                return
+                
             if st.session_state.environment:
                 st.session_state.environment.close()
             
@@ -881,6 +1119,11 @@ class DisasterResponseDashboard:
     
     def reset_simulation(self):
         """Reset the current simulation"""
+        # Check if user has permission
+        if st.session_state.user_role != "admin":
+            st.error("❌ Admin permission required to reset simulation")
+            return
+            
         if st.session_state.environment:
             try:
                 st.session_state.environment.reset()
@@ -895,6 +1138,11 @@ class DisasterResponseDashboard:
     
     def trigger_disaster(self):
         """Trigger disaster in the simulation"""
+        # Check if user has permission
+        if st.session_state.user_role != "admin":
+            st.error("❌ Admin permission required to trigger disaster")
+            return
+            
         if st.session_state.environment and not st.session_state.disaster_triggered:
             try:
                 st.session_state.environment.trigger_disaster()
@@ -912,6 +1160,11 @@ class DisasterResponseDashboard:
     def save_simulation_state(self):
         """Save current simulation state"""
         try:
+            # Check if user has permission
+            if st.session_state.user_role != "admin":
+                st.error("❌ Admin permission required to save simulation")
+                return
+                
             # In a real implementation, this would save to file/database
             st.session_state.last_save_time = datetime.now()
             st.success(f"💾 Progress saved at {st.session_state.last_save_time.strftime('%H:%M:%S')}")
@@ -949,9 +1202,13 @@ class DisasterResponseDashboard:
     def run(self):
         """Run the enhanced dashboard"""
         try:
-            self.render_header()
-            self.render_sidebar()
-            self.render_main_content()
+            # Check if user is authenticated
+            if not st.session_state.authenticated:
+                self.render_login()
+            else:
+                self.render_header()
+                self.render_sidebar()
+                self.render_main_content()
         except Exception as e:
             self.handle_error(f"Dashboard runtime error: {e}")
             st.error("❌ Dashboard encountered an error. Please refresh the page.")
