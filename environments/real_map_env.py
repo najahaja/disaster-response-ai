@@ -298,7 +298,7 @@ class RealMapEnv(SimpleGridEnv):
             self._trigger_real_map_disaster()
     
     def _trigger_real_map_disaster(self):
-        """Trigger disaster on real map data"""
+        """Trigger disaster on real map data """
         print("🚨 Triggering disaster on real map...")
         
         # 1. FIND all valid locations FIRST

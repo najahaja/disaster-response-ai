@@ -495,11 +495,21 @@ class DisasterResponseDashboard:
                 self.render_live_metrics()
             
             # Session info
+            # Session info
             st.subheader("💾 Session Info")
-            st.write(f"Session ID: `{st.session_state.session_id}`")
-            if st.session_state.simulation_data['start_time']:
-                st.write(f"Started: {st.session_state.simulation_data['start_time'].strftime('%H:%M:%S')}")
-    
+            
+            # Use a container to "lock" the position
+            info_container = st.container()
+            with info_container:
+                st.write(f"Session ID: `{st.session_state.session_id}`")
+                if st.session_state.simulation_data['start_time']:
+                    st.write(f"Simulation Start Time: {st.session_state.simulation_data['start_time'].strftime('%H:%M:%S')}")
+                
+                # ADD THIS: Show disaster time here too, so it's all in one place
+                if st.session_state.get('disaster_triggered'):
+                    d_time = st.session_state.simulation_data.get('disaster_time')
+                    if d_time:
+                        st.error(f"🔥 Disaster Triggered: {d_time.strftime('%H:%M:%S')}")
     def render_live_metrics(self):
         """Render enhanced live metrics in sidebar"""
         env = st.session_state.environment
@@ -1096,10 +1106,10 @@ class DisasterResponseDashboard:
             st.session_state.simulation_data['error_log'] = []
             
             # Show success message (NO civilians yet)
-            st.success(f"🚀 Simulation started for {location}!")
-            st.info(f"• Agents deployed: {num_drones} drones, {num_ambulances} ambulances, {num_rescue_teams} rescue teams")
-            st.info(f"• Civilians: 0 (Will appear when disaster is triggered)")
-            logger.info(f"Simulation started successfully with {len(env.agents)} agents. Waiting for disaster trigger.")
+            # st.success(f"🚀 Simulation started for {location}!")
+            # st.info(f"• Agents deployed: {num_drones} drones, {num_ambulances} ambulances, {num_rescue_teams} rescue teams")
+            # st.info(f"• Civilians: 0 (Will appear when disaster is triggered)")
+            # logger.info(f"Simulation started successfully with {len(env.agents)} agents. Waiting for disaster trigger.")
             
         except Exception as e:
             error_msg = f"Failed to start simulation: {e}"
@@ -1308,7 +1318,7 @@ class DisasterResponseDashboard:
                 st.success(f"🚨 DISASTER TRIGGERED! {num_civilians} civilians need rescue!")
                 st.warning("⚠️ Agents: Locate and rescue civilians!")
                 logger.info(f"Disaster triggered with {len(env.civilians)} civilians")
-                
+                st.rerun()
             except Exception as e:
                 self.handle_error(f"Disaster trigger error: {e}")
                 st.error("❌ Failed to trigger disaster")

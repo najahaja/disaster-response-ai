@@ -290,7 +290,7 @@ class SimpleGridEnv(gym.Env):
         return self.screen
     
     def trigger_disaster(self):
-        """Trigger disaster scenario"""
+        """Trigger disaster scenario """
         if self.disaster_triggered:
             return
             
