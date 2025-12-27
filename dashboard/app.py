@@ -424,36 +424,40 @@ class DisasterResponseDashboard:
             
             # Enhanced Agent configuration
             st.subheader("🤖 Agent Configuration")
-            col1, col2 = st.columns(2)
-            with col1:
-                num_drones = st.slider("Drones 🛸", 1, 8, 2, 
-                                     help="Aerial reconnaissance units",
-                                     disabled=st.session_state.user_role == "viewer")  # Disable for viewer
-                num_ambulances = st.slider("Ambulances 🚑", 1, 6, 2,
-                                         help="Medical transport units",
-                                         disabled=st.session_state.user_role == "viewer")  # Disable for viewer
-            with col2:
-                num_rescue_teams = st.slider("Rescue Teams 👷", 1, 4, 1,
-                                           help="Ground rescue units",
-                                           disabled=st.session_state.user_role == "viewer")  # Disable for viewer
-                auto_deploy = st.checkbox("Auto-deploy", value=True,
-                                        help="Automatically deploy agents at optimal positions",
+            num_drones = st.slider("Drones 🛸", 1, 8, 2, 
+                                    help="Aerial reconnaissance units",
+                                    disabled=st.session_state.user_role == "viewer")  # Disable for viewer
+            num_ambulances = st.slider("Ambulances 🚑", 1, 6, 2,
+                                        help="Medical transport units",
                                         disabled=st.session_state.user_role == "viewer")  # Disable for viewer
             
+        
+            num_rescue_teams = st.slider("Rescue Teams 👷", 1, 4, 1,
+                                        help="Ground rescue units",
+                                        disabled=st.session_state.user_role == "viewer")  # Disable for viewer
+            # ADD THIS LINE - Dynamic civilian count
+            num_civilians = st.slider("Civilians 👥", 1, 20, 8,
+                                        help="Number of civilians to rescue",
+                                        disabled=st.session_state.user_role == "viewer")  # Disable for viewer
+            
+            auto_deploy = st.checkbox("Auto-deploy", value=True,
+                                    help="Automatically deploy agents at optimal positions",
+                                    disabled=st.session_state.user_role == "viewer")  # Disable for viewer
+            st.session_state.num_civilians = num_civilians
             # Enhanced Simulation controls
             st.subheader("🎯 Simulation Control")
             
-            control_col1, control_col2 = st.columns(2)
-            with control_col1:
-                start_disabled = st.session_state.user_role == "viewer"
-                if st.button("🚀 Start Simulation", use_container_width=True, 
+            # control_col1, control_col2 = st.columns(2)
+            # with control_col1:
+            start_disabled = st.session_state.user_role == "viewer"
+            if st.button("🚀 Start Simulation", use_container_width=True, 
                            help="Start new simulation with current configuration",
                            disabled=start_disabled):
-                    self.start_simulation(selected_location, num_drones, num_ambulances, num_rescue_teams, auto_deploy)
+                    self.start_simulation(selected_location, num_drones, num_ambulances, num_rescue_teams, num_civilians, auto_deploy)
             
-            with control_col2:
-                stop_disabled = st.session_state.user_role == "viewer" or not st.session_state.simulation_running
-                if st.button("⏹️ Stop Simulation", use_container_width=True,
+            # with control_col2:
+            stop_disabled = st.session_state.user_role == "viewer" or not st.session_state.simulation_running
+            if st.button("⏹️ Stop Simulation", use_container_width=True,
                            help="Stop current simulation",
                            disabled=stop_disabled):
                     self.stop_simulation()
@@ -501,28 +505,46 @@ class DisasterResponseDashboard:
         env = st.session_state.environment
         if not env:
             return
-            
-        # Calculate comprehensive metrics
-        rescued = sum(1 for c in env.civilians if c.get('rescued', False))
-        total_civilians = len(env.civilians)
-        rescue_rate = (rescued / total_civilians * 100) if total_civilians > 0 else 0
-        efficiency = min(env.step_count / max(1, rescued) if rescued > 0 else env.step_count, 100)
         
-        metrics = {
-            "Step": f"{env.step_count} 📈",
-            "Active Agents": f"{len(env.agents)} 🤖",
-            "Civilians": f"{total_civilians} 👥",
-            "Rescued": f"{rescued} ✅ ({rescue_rate:.1f}%)",
-            "Efficiency": f"{efficiency:.1f} ⚡",
-            "Collapsed Buildings": f"{len(env.collapsed_buildings)} 🏚️",
-            "Blocked Roads": f"{len(env.blocked_roads)} 🚧"
-        }
+        # Check if disaster has been triggered
+        if st.session_state.disaster_triggered:
+            # After disaster: show actual civilian metrics
+            rescued = sum(1 for c in env.civilians if c.get('rescued', False))
+            total_civilians = len(env.civilians)
+            target_civilians = st.session_state.get('num_civilians', 8)
+            
+            # Use whichever is smaller (in case some civilians couldn't be placed)
+            effective_total = min(total_civilians, target_civilians)
+            rescue_rate = (rescued / effective_total * 100) if effective_total > 0 else 0
+            
+            metrics = {
+                "Step": f"{env.step_count} 📈",
+                "Status": "🚨 DISASTER",
+                "Active Agents": f"{len(env.agents)} 🤖",
+                "Civilians": f"{total_civilians} 👥",
+                "Rescued": f"{rescued} ✅ ({rescue_rate:.1f}%)",
+                "Remaining": f"{effective_total - rescued} ⚠️",
+            }
+            
+            # Progress bar for rescue
+            st.progress(rescued / effective_total if effective_total > 0 else 0, 
+                    text=f"Rescue: {rescued}/{effective_total}")
+        else:
+            # Before disaster: show readiness metrics
+            metrics = {
+                "Step": f"{env.step_count} 📈",
+                "Status": "✅ READY",
+                "Active Agents": f"{len(env.agents)} 🤖",
+                "Civilians": "0 👥",
+                "Disaster": "⏳ Waiting",
+                "Ready Civilians": f"{st.session_state.get('num_civilians', 8)} ⚡",
+            }
+            
+            # Show info about pending disaster
+            st.info("⚠️ Trigger disaster to spawn civilians")
         
         for metric, value in metrics.items():
             st.metric(metric, value)
-        
-        # Progress visualization
-        st.progress(rescue_rate / 100, text=f"Rescue Progress: {rescue_rate:.1f}%")
     
     def render_main_content(self):
         """Render main dashboard content with enhanced layout"""
@@ -990,7 +1012,7 @@ class DisasterResponseDashboard:
             logger.warning("⚠️ Model file not found. Using random actions.")
             return None
     
-    def start_simulation(self, location, num_drones, num_ambulances, num_rescue_teams, auto_deploy=True):
+    def start_simulation(self, location, num_drones, num_ambulances, num_rescue_teams, num_civilians, auto_deploy=True):
         """Start a new simulation with enhanced error handling"""
         try:
             # Check if user has permission
@@ -999,6 +1021,9 @@ class DisasterResponseDashboard:
                 return
                 
             logger.info(f"Starting simulation for {location} with {num_drones} drones, {num_ambulances} ambulances, {num_rescue_teams} rescue teams")
+            
+            # Store civilian count in session state (for later when disaster is triggered)
+            st.session_state.num_civilians = num_civilians
             
             # Create environment based on mode
             if st.session_state.simulation_mode == 'training':
@@ -1011,86 +1036,158 @@ class DisasterResponseDashboard:
             # Reset environment
             obs, info = env.reset()
             
-            # Add agents with optimized positions if auto_deploy
-            positions = self.calculate_optimal_positions(env, num_drones, num_ambulances, num_rescue_teams) if auto_deploy else None
+            # IMPORTANT: Initialize empty civilians list
+            if hasattr(env, 'civilians'):
+                env.civilians = []  # Start with NO civilians
+                logger.info("Initialized empty civilians list (waiting for disaster)")
             
+            # Calculate positions only if auto_deploy is True
+            positions = None
+            if auto_deploy:
+                positions = self.calculate_optimal_positions(env, num_drones, num_ambulances, num_rescue_teams)
+                if positions is None:
+                    logger.warning("⚠️ Using random positions for agents")
+            
+            # Add drones
             for i in range(num_drones):
-                pos = positions['drones'][i] if positions else np.array([2 + i, 2])
-                drone = DroneAgent(f"drone_{i}", pos, env.config)
-                env.add_agent(drone)
+                try:
+                    if positions and 'drones' in positions and i < len(positions['drones']):
+                        pos = positions['drones'][i]
+                    else:
+                        pos = np.array([2 + i * 2, 2])
+                    drone = DroneAgent(f"drone_{i}", pos, env.config)
+                    env.add_agent(drone)
+                except Exception as e:
+                    logger.error(f"Failed to add drone_{i}: {e}")
             
+            # Add ambulances
             for i in range(num_ambulances):
-                pos = positions['ambulances'][i] if positions else np.array([5, 5 + i])
-                ambulance = AmbulanceAgent(f"ambulance_{i}", pos, env.config)
-                env.add_agent(ambulance)
+                try:
+                    if positions and 'ambulances' in positions and i < len(positions['ambulances']):
+                        pos = positions['ambulances'][i]
+                    else:
+                        pos = np.array([5, 5 + i * 2])
+                    ambulance = AmbulanceAgent(f"ambulance_{i}", pos, env.config)
+                    env.add_agent(ambulance)
+                except Exception as e:
+                    logger.error(f"Failed to add ambulance_{i}: {e}")
             
+            # Add rescue teams
             for i in range(num_rescue_teams):
-                pos = positions['rescue_teams'][i] if positions else np.array([8, 2 + i])
-                rescue_team = RescueTeamAgent(f"rescue_team_{i}", pos, env.config)
-                env.add_agent(rescue_team)
+                try:
+                    if positions and 'rescue_teams' in positions and i < len(positions['rescue_teams']):
+                        pos = positions['rescue_teams'][i]
+                    else:
+                        pos = np.array([8, 2 + i * 3])
+                    rescue_team = RescueTeamAgent(f"rescue_team_{i}", pos, env.config)
+                    env.add_agent(rescue_team)
+                except Exception as e:
+                    logger.error(f"Failed to add rescue_team_{i}: {e}")
             
             # Update session state
             st.session_state.environment = env
             st.session_state.simulation_running = True
             st.session_state.selected_location = location
             st.session_state.simulation_data['start_time'] = datetime.now()
-            st.session_state.disaster_triggered = False
+            st.session_state.disaster_triggered = False  # Important: disaster not triggered yet
             
             # Clear previous data
             st.session_state.simulation_data['steps'] = []
             st.session_state.simulation_data['error_log'] = []
             
+            # Show success message (NO civilians yet)
             st.success(f"🚀 Simulation started for {location}!")
-            logger.info("Simulation started successfully")
+            st.info(f"• Agents deployed: {num_drones} drones, {num_ambulances} ambulances, {num_rescue_teams} rescue teams")
+            st.info(f"• Civilians: 0 (Will appear when disaster is triggered)")
+            logger.info(f"Simulation started successfully with {len(env.agents)} agents. Waiting for disaster trigger.")
             
         except Exception as e:
             error_msg = f"Failed to start simulation: {e}"
             self.handle_error(error_msg)
             st.error(f"❌ {error_msg}")
+            logger.error(traceback.format_exc())
     
     def calculate_optimal_positions(self, env, num_drones, num_ambulances, num_rescue_teams):
         """Find valid ROAD/OPEN positions for agents so they don't get stuck in walls"""
-        grid_size = env.grid_size
-        valid_spots = []
-        
-        # 1. Find all cells that are ROAD (1) or OPEN_SPACE (3)
-        # Check your config.yaml for exact IDs. Usually Road=1, Open=3.
-        for y in range(grid_size):
-            for x in range(grid_size):
-                cell_value = env.grid[y, x]
-                # Assuming 1=Road, 3=Open. Adjust if your config is different.
-                if cell_value == 1 or cell_value == 3: 
+        try:
+            # Check if environment has required attributes
+            if not hasattr(env, 'grid_size'):
+                logger.error("Environment doesn't have grid_size attribute")
+                return None
+                
+            grid_size = env.grid_size
+            valid_spots = []
+            
+            # Check if environment has grid
+            if hasattr(env, 'grid'):
+                # Find all cells that are ROAD (1) or OPEN_SPACE (3)
+                for y in range(grid_size):
+                    for x in range(grid_size):
+                        if y < grid_size and x < grid_size:  # Safety check
+                            cell_value = env.grid[y, x]
+                            # Assuming 1=Road, 3=Open. Adjust if your config is different.
+                            if cell_value == 1 or cell_value == 3: 
+                                valid_spots.append(np.array([x, y]))
+            else:
+                # If no grid, create some default positions
+                logger.warning("Environment doesn't have grid attribute, using default positions")
+                for y in range(2, grid_size-2, 3):
+                    for x in range(2, grid_size-2, 3):
+                        valid_spots.append(np.array([x, y]))
+            
+            # If no valid spots found, create fallback positions
+            if not valid_spots:
+                logger.warning("No valid spots found, using fallback positions")
+                # Create positions around the edges
+                for i in range(max(num_drones, num_ambulances, num_rescue_teams) * 2):
+                    x = np.random.randint(2, grid_size-2)
+                    y = np.random.randint(2, grid_size-2)
                     valid_spots.append(np.array([x, y]))
-        
-        # If map is full of buildings, fallback to random
-        if not valid_spots:
-            valid_spots = [np.array([5, 5]) for _ in range(50)]
             
-        import random
-        # Shuffle spots so agents don't pile up
-        random.shuffle(valid_spots)
-        
-        positions = {
-            'drones': [],
-            'ambulances': [],
-            'rescue_teams': []
-        }
-        
-        # Assign spots (pop from list so no two agents share a spot if possible)
-        idx = 0
-        for _ in range(num_drones):
-            positions['drones'].append(valid_spots[idx % len(valid_spots)])
-            idx += 1
+            import random
+            random.shuffle(valid_spots)
             
-        for _ in range(num_ambulances):
-            positions['ambulances'].append(valid_spots[idx % len(valid_spots)])
-            idx += 1
+            positions = {
+                'drones': [],
+                'ambulances': [],
+                'rescue_teams': []
+            }
             
-        for _ in range(num_rescue_teams):
-            positions['rescue_teams'].append(valid_spots[idx % len(valid_spots)])
-            idx += 1
+            # Assign spots for drones
+            for i in range(num_drones):
+                if i < len(valid_spots):
+                    positions['drones'].append(valid_spots[i])
+                else:
+                    # Fallback position
+                    positions['drones'].append(np.array([2 + i * 2, 2]))
             
-        return positions
+            # Assign spots for ambulances (skip spots used by drones)
+            start_idx = num_drones
+            for i in range(num_ambulances):
+                idx = start_idx + i
+                if idx < len(valid_spots):
+                    positions['ambulances'].append(valid_spots[idx])
+                else:
+                    # Fallback position
+                    positions['ambulances'].append(np.array([5, 5 + i * 2]))
+            
+            # Assign spots for rescue teams (skip spots used by drones and ambulances)
+            start_idx = num_drones + num_ambulances
+            for i in range(num_rescue_teams):
+                idx = start_idx + i
+                if idx < len(valid_spots):
+                    positions['rescue_teams'].append(valid_spots[idx])
+                else:
+                    # Fallback position
+                    positions['rescue_teams'].append(np.array([8, 2 + i * 3]))
+            
+            logger.info(f"Calculated positions: {len(positions['drones'])} drones, {len(positions['ambulances'])} ambulances, {len(positions['rescue_teams'])} rescue teams")
+            return positions
+            
+        except Exception as e:
+            logger.error(f"Error in calculate_optimal_positions: {e}")
+            logger.error(traceback.format_exc())
+            return None
     
     def stop_simulation(self):
         """Stop the current simulation with proper cleanup"""
@@ -1126,10 +1223,21 @@ class DisasterResponseDashboard:
             
         if st.session_state.environment:
             try:
-                st.session_state.environment.reset()
+                env = st.session_state.environment
+                
+                # Reset the environment
+                env.reset()
+                
+                # Clear civilians (disaster is reset)
+                if hasattr(env, 'civilians'):
+                    env.civilians = []
+                
+                # Reset session state
                 st.session_state.simulation_data['steps'] = []
                 st.session_state.disaster_triggered = False
-                st.success("🔄 Simulation reset!")
+                
+                st.success("🔄 Simulation reset! Civilians cleared. Ready for new disaster.")
+                logger.info("Simulation reset - civilians cleared")
             except Exception as e:
                 self.handle_error(f"Reset error: {e}")
                 st.error("❌ Failed to reset simulation")
@@ -1137,18 +1245,70 @@ class DisasterResponseDashboard:
             st.warning("⚠️ No active simulation to reset")
     
     def trigger_disaster(self):
-        """Trigger disaster in the simulation"""
+        """Trigger disaster in the simulation - THIS IS WHERE CIVILIANS ARE CREATED"""
         # Check if user has permission
         if st.session_state.user_role != "admin":
             st.error("❌ Admin permission required to trigger disaster")
             return
-            
+        
         if st.session_state.environment and not st.session_state.disaster_triggered:
             try:
-                st.session_state.environment.trigger_disaster()
+                env = st.session_state.environment
+                
+                # Get the civilian count from session state
+                num_civilians = st.session_state.get('num_civilians', 8)
+                
+                # Initialize civilians list if it doesn't exist
+                if not hasattr(env, 'civilians'):
+                    env.civilians = []
+                
+                # Clear any existing civilians (should be empty, but just in case)
+                env.civilians = []
+                
+                # Generate civilians at the moment of disaster
+                logger.info(f"Creating {num_civilians} civilians due to disaster")
+                
+                for i in range(num_civilians):
+                    # Find valid position (not in a building)
+                    attempts = 0
+                    while attempts < 50:
+                        x = np.random.randint(0, env.grid_size)
+                        y = np.random.randint(0, env.grid_size)
+                        
+                        # Check if position is valid
+                        if hasattr(env, 'grid') and y < env.grid_size and x < env.grid_size:
+                            cell_value = env.grid[y, x]
+                            # Valid positions: not a building (assuming 2 = building)
+                            if cell_value != 2:
+                                break
+                        else:
+                            break  # Use the position if we can't validate
+                        
+                        attempts += 1
+                    
+                    # Add civilian
+                    env.civilians.append({
+                        'id': f'civilian_{i}',
+                        'position': np.array([x, y]),
+                        'rescued': False,
+                        'health': np.random.randint(30, 100),  # Some are more injured than others
+                        'found': False,
+                        'trapped_in_building': np.random.choice([True, False], p=[0.3, 0.7])  # 30% trapped
+                    })
+                
+                # Also trigger other disaster effects from the environment
+                # (This depends on your environment's trigger_disaster method)
+                if hasattr(env, 'trigger_disaster'):
+                    env.trigger_disaster()
+                
+                # Update session state
                 st.session_state.disaster_triggered = True
-                st.success("🚨 Disaster triggered!")
-                logger.info("Disaster triggered in simulation")
+                st.session_state.simulation_data['disaster_time'] = datetime.now()
+                
+                st.success(f"🚨 DISASTER TRIGGERED! {num_civilians} civilians need rescue!")
+                st.warning("⚠️ Agents: Locate and rescue civilians!")
+                logger.info(f"Disaster triggered with {len(env.civilians)} civilians")
+                
             except Exception as e:
                 self.handle_error(f"Disaster trigger error: {e}")
                 st.error("❌ Failed to trigger disaster")

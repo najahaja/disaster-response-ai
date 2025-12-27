@@ -308,7 +308,7 @@ class RealMapEnv(SimpleGridEnv):
         # 2. GENERATE civilians and place them in buildings
         #    (Do this *before* you collapse them)
         print(f"Generating civilians... Found {len(building_locations)} building locations.")
-        num_civilians = self.config['environment'].get('num_civilians', 10)
+        num_civilians = self.config['environment'].get('num_civilians', 0)
         
         if len(building_locations) > 0:
             for _ in range(num_civilians):

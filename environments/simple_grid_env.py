@@ -142,7 +142,7 @@ class SimpleGridEnv(gym.Env):
             # Inside your reset() method
             self.add_agent(DroneAgent(agent_id="drone_0", position=[1, 1], config=self.config))
             self.add_agent(AmbulanceAgent(agent_id="ambulance_0", position=[1, self.grid_size-2], config=self.config))
-            self.add_agent(RescueTeamAgent(agent_id="rescue_0", position=[self.grid_size-2, 1], config=self.config))
+            self.add_agent(RescueTeamAgent(agent_id="rescue_team_0", position=[self.grid_size-2, 1], config=self.config))
             # self.add_agent(BaseAgent(agent_id="base_0", position=[self.grid_size-2, 1], config=self.config))
         
         except NameError as e:

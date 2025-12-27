@@ -1,7 +1,7 @@
 environment:
   grid_size: 45
   cell_size: 12
-  max_steps: 1000
+  max_steps: 5000
 
   # --- FIX 1: Merged into ONE block ---
   cell_types:
