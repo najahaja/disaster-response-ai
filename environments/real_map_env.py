@@ -27,26 +27,31 @@ class RealMapEnv(SimpleGridEnv):
     """
     
     def __init__(self, location_name=None, config_path="config.yaml"):
-        # Load configuration
+        # 1. Load configuration (Always first)
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
         
-        # Gymnasium required attributes
+        # 2. Gymnasium required attributes
         self.metadata = {'render_modes': ['human', 'rgb_array'], 'render_fps': 10}
         
-        # Real map attributes
+        # 3. Real map attributes
         self.location_name = location_name
         self.real_map_loaded = False
         self.map_data = None
         
-        # Environment parameters
+        # 4. Environment parameters
         self.grid_size = self.config['environment']['grid_size']
         self.cell_size = self.config['environment']['cell_size']
         self.cell_types = self.config['environment']['cell_types']
         self.colors = self.config['visualization']['colors']
         self.max_steps = self.config['environment']['max_steps']
+
+        # 5. INITIALIZE FONTS HERE (Before calling other setup methods)
+        pygame.font.init()
+        self.small_font = pygame.font.SysFont('Arial', 12)
+        self.header_font = pygame.font.SysFont('Arial', 18, bold=True)
         
-        # Define action and observation spaces
+        # 6. Define action and observation spaces
         self.action_space = spaces.Discrete(6)
         self.observation_space = spaces.Box(
             low=0, high=255, 
@@ -54,7 +59,7 @@ class RealMapEnv(SimpleGridEnv):
             dtype=np.uint8
         )
         
-        # Environment state
+        # 7. Environment state
         self.grid = None
         self.agents = {}
         self.civilians = []
@@ -63,14 +68,14 @@ class RealMapEnv(SimpleGridEnv):
         self.disaster_triggered = False
         self.step_count = 0
         
-        # PyGame setup
+        # 8. PyGame setup
         self.screen = None
         self.font = None
         self.display_available = False
         
-        self.initialize_pygame()
+        # 9. Now call your setup methods safely
+        self.initialize_pygame() 
         self._initialize_environment()
-    
     def _initialize_environment(self):
         """Initialize environment with a real map or fallback to generated grid"""
         print(f"🗺️  Loading map for {self.location_name or 'default location'}...")

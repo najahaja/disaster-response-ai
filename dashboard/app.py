@@ -346,53 +346,156 @@ class DisasterResponseDashboard:
         
     
     def render_header(self):
-        """Render enhanced dashboard header with user info"""
-        col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
+        """Render a two-row header with fixed button styling"""
         
-        with col1:
-            st.markdown('<h1 class="main-header">🚨 Disaster Response AI Dashboard</h1>', 
-                       unsafe_allow_html=True)
-        
-        with col2:
-            if st.session_state.user_role == "admin":
-                role_badge = "admin"
-                badge_class = "admin-badge"
-            else:
-                role_badge = "viewer"
-                badge_class = "viewer-badge"
+        # 1. Improved CSS with !important to override Streamlit defaults
+        st.markdown("""
+            <style>
+            .main-header {
+                font-size: 46px !important;
+                font-weight: 700 !important;
+                margin: 0 !important;
+            }
+            .user-info-box {
+                text-align: right;
+                line-height: 1.2;
+                margin-bottom: 5px;
+            }
+            .role-badge {
+                padding: 2px 6px;
+                border-radius: 10px;
+                font-size: 0.75rem;
+                color: white !important;
+                font-weight: bold;
+                text-transform: uppercase;
+                margin-left: 5px;
+            }
+            .admin-badge { background-color: #ff4b4b; }
+            .viewer-badge { background-color: #007bff; }
+            .logout-container div[data-testid="stButton"] > button {
             
+            width: 50px !important; 
+            
+            
+            margin-left: auto !important; 
+            display: block !important;
+            
+            background-color: #ff4b4b !important;
+            color: white !important;
+            border-radius: 8px !important;
+            border: none !important;
+            padding: 2px 4px !important;
+            font-size: 0.9rem !important;
+            height: 32px !important;
+        }
+
+        .logout-container div[data-testid="stButton"] {
+            text-align: right !important;
+            width: 100% !important;
+        }
+            
+
+            /* --- TARGETING ALL 4 METRICS SPECIFICALLY --- */
+            /* This targets the top label text (e.g., 'Simulation Status') */
+            [data-testid="stMetricLabel"] > div > p {
+                font-size: 1.4rem !important; /* Increased font size */
+                font-weight: 600 !important;
+                color: #31333F !important;
+                line-height: 1.2 !important;
+            }
+            
+            /* This targets the large value text (e.g., 'Running', 'Real Map') */
+            [data-testid="stMetricValue"] > div {
+                font-size: 2rem !important; /* Increased font size */
+                font-weight: 600 !important;
+                color: #1f77b4 !important; /* Adding a subtle blue tint for visibility */
+            }
+
+            /* Fixes spacing between rows */
+            [data-testid="stMetric"] {
+                padding: 10px !important;
+                
+            }
+            </style>
+        """, unsafe_allow_html=True)
+
+        # --- ROW 1: Title and Login Info ---
+        row1_col1, row1_col2 = st.columns([3, 1])
+        
+        with row1_col1:
+            st.markdown('<h1 class="main-header">🚨 Disaster Response AI Dashboard</h1>', unsafe_allow_html=True)
+        
+        with row1_col2:
+            role = st.session_state.user_role
+            badge_class = "admin-badge" if role == "admin" else "viewer-badge"
             st.markdown(f"""
-            <div style="text-align: right;">
-                <div style="font-size: 1rem; color: #666;">Logged in as</div>
-                <div style="font-size: 1.2rem; font-weight: 600;">
-                    {st.session_state.username}
-                    <span class="role-badge {badge_class}">{role_badge}</span>
+                <div class="user-info-box">
+                    <small style="color: gray;">Logged in as</small><br>
+                    <strong>{st.session_state.username}</strong>
+                    <span class="role-badge {badge_class}">{role}</span>
                 </div>
-            </div>
             """, unsafe_allow_html=True)
-        
-        with col3:
-            if st.button("👤 Logout", use_container_width=True):
+            
+            # Wrapped Logout button
+            st.markdown('<div class="logout-container">', unsafe_allow_html=True)
+            if st.button("Logout", key="top_logout", use_container_width=True):
                 st.session_state.authenticated = False
-                st.session_state.username = None
-                st.session_state.user_role = None
                 st.rerun()
-        
-        with col4:
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # --- ROW 2: The 4 Metrics ---
+        m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+
+        with m_col1:
             status_icon = "🟢" if st.session_state.simulation_running else "🔴"
             status_text = "Running" if st.session_state.simulation_running else "Stopped"
-            st.metric("Status", f"{status_icon} {status_text}")
-    
+            st.metric("Simulation Status", f"{status_icon} {status_text}")
+
+        with m_col2:
+            # Check the simulation state to update the metric text
+            if not st.session_state.simulation_running:
+                display_env = "Not Loaded"
+            else:
+                raw_loc = st.session_state.get('selected_location', '')
+                # Logic: If 'Generated City' is selected, it's a Generated Map
+                display_env = "Generated Map" if raw_loc == "Generated City" else "Real Map"
+            
+            st.metric("Environment", display_env)
+
+        with m_col3:
+            rescued_count = 0
+            if st.session_state.environment:
+                rescued_count = sum(1 for c in st.session_state.environment.civilians if c.get('rescued'))
+            st.metric("Civilians Rescued", f"{rescued_count} 🎯")
+
+        with m_col4:
+            if st.session_state.simulation_running and st.session_state.simulation_data['start_time']:
+                from datetime import datetime
+                elapsed = (datetime.now() - st.session_state.simulation_data['start_time']).total_seconds()
+                time_display = f"{int(elapsed)}s"
+            else:
+                time_display = "0s"
+            st.metric("Run Time", f"{time_display} ⏱️")
+
+        st.divider()
+        
     def render_sidebar(self):
         """Render enhanced sidebar with role-based permissions"""
         with st.sidebar:
             st.header("🎮 Simulation Controls")
             
-            # Display user info in sidebar
+          # --- User Info Display ---
+            # Using a single markdown block for better alignment
+            role_color = "#FF4B4B" if st.session_state.user_role == "admin" else "#1F77B4"
+            
             st.markdown(f"""
-            **User:** {st.session_state.username}
-            **Role:** {st.session_state.user_role}
-            """)
+                <div style="background-color: rgba(151, 166, 195, 0.1); padding: 10px; border-radius: 5px;">
+                    <span style="font-weight: bold;">👤 User:</span> {st.session_state.username}<br>
+                    <span style="font-weight: bold;">🛡️ Role:</span> <span style="color: {role_color}; font-weight: bold;">{st.session_state.user_role.capitalize()}</span>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            st.divider()
             
             # Simulation Mode Selection
             st.subheader("🔧 Simulation Mode")
