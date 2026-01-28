@@ -261,15 +261,14 @@ class DisasterResponseDashboard:
             st.error("⚠️ Some dashboard features may be limited")
     
     def render_login(self):
-        """Render login form"""
+        """Render login form - Corrected Version"""
         st.markdown('<h1 class="main-header">🚨 Disaster Response AI Dashboard</h1>', 
-                unsafe_allow_html=True)
+                    unsafe_allow_html=True)
 
         # Create 3 columns: Empty | Form | Empty
         col_left, col_center, col_right = st.columns([1, 2, 1])
 
         with col_center:
-            # Put everything inside this middle column
             st.markdown("""
             <div class="login-form">
                 <h3>🔐 Login Portal</h3>
@@ -282,59 +281,25 @@ class DisasterResponseDashboard:
                 username = st.text_input("Username", placeholder="Enter username")
                 password = st.text_input("Password", type="password", placeholder="Enter password")
                 
-                # Create columns for buttons
-                col1, col2 = st.columns([1, 1])
-                with col1:
-                    submit_button = st.form_submit_button("Login", use_container_width=True)
-                with col2:
-                    demo_button = st.form_submit_button("View Demo", use_container_width=True)
+                # Submit button
+                submit_button = st.form_submit_button("Login", use_container_width=True)
                 
-                # Handle the actions when buttons are pressed
+            # Handle the actions when the login button is pressed
             if submit_button:
-
                 if username and password:
-
                     authenticated, role = self.login_system.authenticate(username, password)
-
                     if authenticated:
-
                         st.session_state.authenticated = True
-
                         st.session_state.username = username
-
                         st.session_state.user_role = role
-
                         st.success(f"✅ Welcome {username}!")
-
                         st.rerun()
-
                     else:
-
                         st.error("❌ Invalid username or password")
-
                 else:
-
                     st.warning("⚠️ Please enter both username and password")
 
-           
-
-            if demo_button:
-
-                # Demo mode - auto login as viewer
-
-                authenticated, role = self.login_system.authenticate("viewer", "Viewer@123")
-
-                if authenticated:
-
-                    st.session_state.authenticated = True
-
-                    st.session_state.username = "viewer"
-
-                    st.session_state.user_role = "viewer"
-
-                    st.success("✅ Entering demo mode as viewer")
-
-                    st.rerun()
+            # Removed the 'if demo_button:' block completely to prevent the error
 
             # Expandable Note Section
             with st.expander("Note"):
@@ -372,27 +337,43 @@ class DisasterResponseDashboard:
             }
             .admin-badge { background-color: #ff4b4b; }
             .viewer-badge { background-color: #007bff; }
-            .logout-container div[data-testid="stButton"] > button {
-            
-            width: 50px !important; 
-            
-            
-            margin-left: auto !important; 
-            display: block !important;
-            
-            background-color: #ff4b4b !important;
-            color: white !important;
-            border-radius: 8px !important;
-            border: none !important;
-            padding: 2px 4px !important;
-            font-size: 0.9rem !important;
-            height: 32px !important;
-        }
+          .logout-container {
+    display: flex !important;
+    flex-direction: column !important; /* Stack vertically if needed */
+    align-items: flex-end !important;  /* PUSHES CONTENT TO THE FAR RIGHT */
+    width: 100% !important;
+    padding-top: 10px !important;
+}
 
-        .logout-container div[data-testid="stButton"] {
-            text-align: right !important;
-            width: 100% !important;
-        }
+    /* This targets the Streamlit button wrapper */
+    .logout-container div[data-testid="stButton"] {
+        display: flex !important;
+        justify-content: flex-end !important;
+        width: 100% !important;
+    }
+
+    /* This targets the actual button element */
+    .logout-container div[data-testid="stButton"] > button {
+        width: 120px !important;      /* Fixed professional width */
+        height: 40px !important;
+        margin-right: 0 !important;   /* Ensures no extra space on the right */
+        margin-left: auto !important; /* Forces it to the right */
+        background-color: white !important;
+        color: #31333F !important;
+        border: 1px solid #dcdcdc !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        transition: 0.3s ease !important;
+    }
+
+    /* Hover effect as requested */
+    .logout-container div[data-testid="stButton"] > button:hover {
+        background-color: #ff4b4b !important; /* Emergency Red */
+        color: white !important;
+        border-color: #ff4b4b !important;
+    }
+
+        
             
 
             /* --- TARGETING ALL 4 METRICS SPECIFICALLY --- */
@@ -403,6 +384,7 @@ class DisasterResponseDashboard:
                 color: #31333F !important;
                 line-height: 1.2 !important;
             }
+            
             
             /* This targets the large value text (e.g., 'Running', 'Real Map') */
             [data-testid="stMetricValue"] > div {
@@ -420,7 +402,7 @@ class DisasterResponseDashboard:
         """, unsafe_allow_html=True)
 
         # --- ROW 1: Title and Login Info ---
-        row1_col1, row1_col2 = st.columns([3, 1])
+        row1_col1, row1_col2 = st.columns([7, 1])
         
         with row1_col1:
             st.markdown('<h1 class="main-header">🚨 Disaster Response AI Dashboard</h1>', unsafe_allow_html=True)
@@ -438,9 +420,12 @@ class DisasterResponseDashboard:
             
             # Wrapped Logout button
             st.markdown('<div class="logout-container">', unsafe_allow_html=True)
-            if st.button("Logout", key="top_logout", use_container_width=True):
+
+            # 2. Make sure you REMOVE use_container_width=True here!
+            if st.button("LOGOUT", key="top_logout"):
                 st.session_state.authenticated = False
                 st.rerun()
+
             st.markdown('</div>', unsafe_allow_html=True)
 
         # --- ROW 2: The 4 Metrics ---

@@ -158,12 +158,12 @@ class SimpleGridEnv(gym.Env):
         return observation, info
     
     def step(self, action):
+
         """
         Execute one simulation step - modified for single-agent gym interface
         Compatible with Gymnasium (returns 5 values)
         """
         self.step_count += 1
-
         # Handle multi-agent or single-agent action input
         if isinstance(action, dict):
             # Multi-agent mode
@@ -179,13 +179,12 @@ class SimpleGridEnv(gym.Env):
             # Single-agent mode (for gym compatibility)
             if self.agents:
                 agent_id = list(self.agents.keys())[0]
+
                 agent = self.agents[agent_id]
                 action_str = self._decode_action(action)
                 agent.move(action_str, self.grid)
-
         # Check for civilian rescues
         self._check_civilian_rescues()
-
         # Calculate rewards
         rewards = self.calculate_rewards()
         total_reward = sum(rewards.values()) if isinstance(rewards, dict) else rewards
@@ -193,20 +192,23 @@ class SimpleGridEnv(gym.Env):
         # Determine episode end conditions
         terminated = self._all_civilians_rescued()
         truncated = self.step_count >= self.max_steps
-
         # Compute observation
+
         obs = self._get_gym_observation()
 
         info = {
+
             'step': self.step_count,
+
             'civilians_rescued': sum(1 for c in self.civilians if c['rescued']),
+
             'total_civilians': len(self.civilians),
+
             'agents_count': len(self.agents)
+
         }
 
         return obs, total_reward, terminated, truncated, info
-
-    
     def _decode_action(self, action):
         """Decode numeric action to string"""
         actions = ['UP', 'DOWN', 'LEFT', 'RIGHT', 'STAY', 'REST']
@@ -293,7 +295,6 @@ class SimpleGridEnv(gym.Env):
         """Trigger disaster scenario """
         if self.disaster_triggered:
             return
-            
         self.disaster_triggered = True
         self.grid, self.civilians, self.collapsed_buildings, self.blocked_roads = \
             DisasterGenerator.generate_disaster(self.grid, self.config)
