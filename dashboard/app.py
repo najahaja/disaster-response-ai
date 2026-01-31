@@ -313,9 +313,9 @@ class DisasterResponseDashboard:
     def render_header(self):
         """Render a two-row header with fixed button styling"""
         
-        # 1. Improved CSS with !important to override Streamlit defaults
         st.markdown("""
             <style>
+            /* --- HEADER TEXT --- */
             .main-header {
                 font-size: 46px !important;
                 font-weight: 700 !important;
@@ -337,72 +337,52 @@ class DisasterResponseDashboard:
             }
             .admin-badge { background-color: #ff4b4b; }
             .viewer-badge { background-color: #007bff; }
-          .logout-container {
-    display: flex !important;
-    flex-direction: column !important; /* Stack vertically if needed */
-    align-items: flex-end !important;  /* PUSHES CONTENT TO THE FAR RIGHT */
-    width: 100% !important;
-    padding-top: 10px !important;
-}
 
-    /* This targets the Streamlit button wrapper */
-    .logout-container div[data-testid="stButton"] {
-        display: flex !important;
-        justify-content: flex-end !important;
-        width: 100% !important;
-    }
-
-    /* This targets the actual button element */
-    .logout-container div[data-testid="stButton"] > button {
-        width: 120px !important;      /* Fixed professional width */
-        height: 40px !important;
-        margin-right: 0 !important;   /* Ensures no extra space on the right */
-        margin-left: auto !important; /* Forces it to the right */
-        background-color: white !important;
-        color: #31333F !important;
-        border: 1px solid #dcdcdc !important;
-        border-radius: 8px !important;
-        font-weight: 600 !important;
-        transition: 0.3s ease !important;
-    }
-
-    /* Hover effect as requested */
-    .logout-container div[data-testid="stButton"] > button:hover {
-        background-color: #ff4b4b !important; /* Emergency Red */
-        color: white !important;
-        border-color: #ff4b4b !important;
-    }
-
-        
-            
-
-            /* --- TARGETING ALL 4 METRICS SPECIFICALLY --- */
-            /* This targets the top label text (e.g., 'Simulation Status') */
-            [data-testid="stMetricLabel"] > div > p {
-                font-size: 1.4rem !important; /* Increased font size */
-                font-weight: 600 !important;
+            /* --- LOGOUT BUTTON (FIXED ALIGNMENT) --- */
+            .logout-container {
+                display: flex !important;
+                justify-content: flex-end !important;
+                width: 100% !important;
+                padding-top: 10px !important;
+            }
+            .logout-container div[data-testid="stButton"] > button {
+                width: 120px !important;
+                height: 40px !important;
+                background-color: white !important;
                 color: #31333F !important;
-                line-height: 1.2 !important;
-            }
-            
-            
-            /* This targets the large value text (e.g., 'Running', 'Real Map') */
-            [data-testid="stMetricValue"] > div {
-                font-size: 2rem !important; /* Increased font size */
+                border: 1px solid #dcdcdc !important;
+                border-radius: 8px !important;
                 font-weight: 600 !important;
-                color: #1f77b4 !important; /* Adding a subtle blue tint for visibility */
+                transition: 0.3s ease !important;
+            }
+            .logout-container div[data-testid="stButton"] > button:hover {
+                background-color: #ff4b4b !important;
+                color: white !important;
+                border-color: #ff4b4b !important;
+                /* Removed margin-right to prevent 'jumping' */
             }
 
-            /* Fixes spacing between rows */
-            [data-testid="stMetric"] {
-                padding: 10px !important;
-                
+            /* --- METRICS SCALING --- */
+            [data-testid="stMetricLabel"] p {
+                font-size: 1.4rem !important; /* Slightly reduced for better fit */
+                font-weight: 600 !important;
+                padding-left: 10px !important;
+            }
+            [data-testid="stMetricValue"] > div {
+                font-size: 2.0rem !important;
+                padding-left: 10px !important;
+                color: #1f77b4 !important;
+            }
+            /* Specialized padding for the Run Time column */
+            [data-testid="column"]:nth-child(4) [data-testid="stMetric"] {
+                padding-right: 20px !important;
+                text-align: right !important;
             }
             </style>
         """, unsafe_allow_html=True)
 
         # --- ROW 1: Title and Login Info ---
-        row1_col1, row1_col2 = st.columns([7, 1])
+        row1_col1, row1_col2 = st.columns([7, 1]) # Adjusted ratio for better spacing
         
         with row1_col1:
             st.markdown('<h1 class="main-header">🚨 Disaster Response AI Dashboard</h1>', unsafe_allow_html=True)
@@ -418,40 +398,31 @@ class DisasterResponseDashboard:
                 </div>
             """, unsafe_allow_html=True)
             
-            # Wrapped Logout button
             st.markdown('<div class="logout-container">', unsafe_allow_html=True)
-
-            # 2. Make sure you REMOVE use_container_width=True here!
             if st.button("LOGOUT", key="top_logout"):
                 st.session_state.authenticated = False
                 st.rerun()
-
             st.markdown('</div>', unsafe_allow_html=True)
 
         # --- ROW 2: The 4 Metrics ---
-        m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+        m_col1, m_col2, m_col3, m_col4 = st.columns([2,2,1,2])
 
         with m_col1:
             status_icon = "🟢" if st.session_state.simulation_running else "🔴"
             status_text = "Running" if st.session_state.simulation_running else "Stopped"
-            st.metric("Simulation Status", f"{status_icon} {status_text}")
+            st.metric("Status", f"{status_icon} {status_text}")
 
         with m_col2:
-            # Check the simulation state to update the metric text
             if not st.session_state.simulation_running:
                 display_env = "Not Loaded"
             else:
                 raw_loc = st.session_state.get('selected_location', '')
-                # Logic: If 'Generated City' is selected, it's a Generated Map
-                display_env = "Generated Map" if raw_loc == "Generated City" else "Real Map"
-            
+                display_env = "Generated" if raw_loc == "Generated City" else "Real Map"
             st.metric("Environment", display_env)
 
         with m_col3:
-            rescued_count = 0
-            if st.session_state.environment:
-                rescued_count = sum(1 for c in st.session_state.environment.civilians if c.get('rescued'))
-            st.metric("Civilians Rescued", f"{rescued_count} 🎯")
+            rescued = sum(1 for c in st.session_state.environment.civilians if c.get('rescued')) if st.session_state.environment else 0
+            st.metric("Rescued", f"{rescued} 🎯")
 
         with m_col4:
             if st.session_state.simulation_running and st.session_state.simulation_data['start_time']:
@@ -653,9 +624,31 @@ class DisasterResponseDashboard:
     
     def render_enhanced_welcome_screen(self):
         """Render enhanced welcome screen"""
+        
+            
+        
         st.markdown("""
         ## 🌟 Welcome to Disaster Response AI Dashboard
+        """)
+        st.divider()    
+        st.success("""
+        ### 🧭 Simulation Legend:
         
+        **🛰️ Active Agents & Targets:**
+        * 🟢 **Rescue Teams**: Specialized ground coordination units.
+        * 🔵 **Drones**: Multi-agent aerial surveillance and mapping.
+        * 🔴 **Ambulances**: Medical transport for rescued civilians.
+        * 🟡 **Civilians**: Targets requiring immediate assistance.
+
+        **🏘️ Environment & Hazards:**
+        * 🟤 **Buildings**: Standard urban structures and housing.
+        * 🔘 **Roads**: Navigable street and transport network.
+        * ⚪ **Hospitals**: Safe zones and medical delivery points.
+        * 🟠 **Collapsed Buildings**: Significant structural failures or damage.
+        * 🛑 **Road Blocks**: Blocked routes or debris-filled paths.
+        """)
+        st.divider()    
+        st.markdown(""" 
         ### Role Information:
         """)
         
@@ -850,7 +843,7 @@ class DisasterResponseDashboard:
                 st.session_state.simulation_running = False
                 st.balloons()
                 st.success("Simulation Complete!")
-                time.sleep(3)
+                time.sleep(2)
                 st.rerun()
                 return
 
