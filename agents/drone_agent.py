@@ -4,6 +4,12 @@ import numpy as np
 class DroneAgent(BaseAgent):
     """
     Drone agent with scouting capabilities
+    
+    Special Abilities:
+    - Can fly over buildings (unlike ground vehicles)
+    - Can scout areas from above
+    - Faster movement speed
+    - Limited rescue capacity (needs to guide ground teams)
     """
     
     def __init__(self, agent_id, position, config):

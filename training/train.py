@@ -18,18 +18,22 @@ import json
 import zipfile
 from pathlib import Path
 
-# Add custom imports
-sys.path.append('./environments')
-sys.path.append('./models')
-sys.path.append('./utils')
+# Add project root and subdirectories to path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
+sys.path.append(os.path.join(project_root, 'environments'))
+sys.path.append(os.path.join(project_root, 'training'))
+sys.path.append(os.path.join(project_root, 'utils'))
 
 # Custom imports
-from simple_grid_env import SimpleGridEnv
-from real_map_env import RealMapEnv
-from ppo_model import PPOModel
-from qmix_model import QMixModel
-from replay_buffer import ReplayBuffer
-from config_loader import ConfigLoader
+from environments.simple_grid_env import SimpleGridEnv
+from environments.real_map_env import RealMapEnv
+from training.ppo_model import PPOModel
+from training.qmix_model import QMIXModel
+from training.replay_buffer import ReplayBuffer
+from training.config_loader import ConfigLoader
 
 class MultiAgentTrainer:
     """Main trainer class that handles both PPO and QMIX training"""
@@ -87,28 +91,43 @@ class MultiAgentTrainer:
         print("Initializing environments...")
         
         # Training environment (SimpleGridEnv)
-        train_config = {
-            'grid_size': self.config['train_grid_size'],
-            'n_agents': self.config['n_agents'],
-            'n_goals': self.config['n_goals'],
-            'max_steps': self.config['max_steps_per_episode'],
-            'obs_type': self.config['obs_type'],
-            'reward_config': self.config['reward_config']
-        }
+        # Now supports configurable agents and civilians
+        grid_size = self.config.get('train_grid_size', 36)
+        config_path = self.config.get('env_config_path', 'config.yaml')
         
-        self.train_env = SimpleGridEnv(**train_config)
+        # Agent configuration
+        n_drones = self.config.get('n_drones', 1)
+        n_ambulances = self.config.get('n_ambulances', 1)
+        n_rescue_teams = self.config.get('n_rescue_teams', 1)
+        
+        # Civilian configuration
+        spawn_civilians = self.config.get('spawn_civilians', True)
+        n_civilians = self.config.get('n_civilians', None)  # None = use config.yaml default
+        
+        self.train_env = SimpleGridEnv(
+            grid_size=grid_size, 
+            config_path=config_path,
+            n_drones=n_drones,
+            n_ambulances=n_ambulances,
+            n_rescue_teams=n_rescue_teams,
+            spawn_civilians=spawn_civilians,
+            n_civilians=n_civilians
+        )
+        
         print(f"Training Environment: {self.train_env.grid_size}x{self.train_env.grid_size} grid")
-        print(f"Number of agents: {self.train_env.n_agents}")
+        print(f"  Agents: {n_drones} drone(s), {n_ambulances} ambulance(s), {n_rescue_teams} rescue team(s)")
+        print(f"  Civilians: {'Enabled' if spawn_civilians else 'Disabled'}" + 
+              (f" ({n_civilians} civilians)" if n_civilians else ""))
         print(f"Observation space: {self.train_env.observation_space}")
         print(f"Action space: {self.train_env.action_space}")
         
         # Testing environment (RealMapEnv) - only if we have map data
-        if self.config['use_real_map_for_testing'] and self.config.get('map_file'):
+        if self.config.get('use_real_map_for_testing', False) and self.config.get('map_file'):
             test_config = {
                 'map_file': self.config['map_file'],
-                'n_agents': self.config['n_agents'],
-                'max_steps': self.config['max_steps_per_episode'],
-                'use_physics': self.config['use_physics'],
+                'n_agents': self.config.get('n_agents', 3),
+                'max_steps': self.config.get('max_steps_per_episode', 1000),
+                'use_physics': self.config.get('use_physics', False),
                 'noise_level': self.config.get('sensor_noise', 0.0)
             }
             self.test_env = RealMapEnv(**test_config)
@@ -129,40 +148,56 @@ class MultiAgentTrainer:
             raise ValueError(f"Unsupported algorithm: {algorithm}. Choose 'ppo' or 'qmix'")
         
         print(f"Initialized {algorithm.upper()} model")
-        print(f"Total parameters: {sum(p.numel() for p in self.model.parameters()):,}")
+        print(f"Total parameters: {sum(p.numel() for p in self.model.policy_net.parameters()):,}")
         
         # Move model to device
-        self.model.to(self.device)
+        self.model.policy_net.to(self.device)
     
     def _initialize_ppo(self):
         """Initialize PPO model"""
-        # Get observation and action dimensions
-        obs_dim = self.train_env.observation_space
-        action_dim = self.train_env.action_space
+        # Get observation and action dimensions from Gym spaces
+        # observation_space is a Box, action_space is Discrete
+        obs_space = self.train_env.observation_space
+        action_space = self.train_env.action_space
         
-        # PPO specific config
+        # Extract dimensions properly
+        if hasattr(obs_space, 'shape'):
+            # For Box spaces, flatten the observation
+            obs_dim = int(np.prod(obs_space.shape))
+        else:
+            obs_dim = obs_space.n
+            
+        if hasattr(action_space, 'n'):
+            # For Discrete spaces
+            action_dim = action_space.n
+        else:
+            action_dim = action_space.shape[0]
+        
+        # PPO specific config - only include parameters that PPOModel accepts
         ppo_config = {
             'state_dim': obs_dim,
             'action_dim': action_dim,
-            'n_agents': self.config['n_agents'],
+            'n_agents': self.config.get('n_agents', 1),
             'hidden_dim': self.config.get('hidden_dim', 128),
             'n_layers': self.config.get('n_layers', 2),
-            'use_lstm': self.config.get('use_lstm', False),
+            'continuous': False,  # Discrete action space
             'gamma': self.config.get('gamma', 0.99),
             'gae_lambda': self.config.get('gae_lambda', 0.95),
             'clip_epsilon': self.config.get('clip_epsilon', 0.2),
             'value_coef': self.config.get('value_coef', 0.5),
-            'entropy_coef': self.config.get('entropy_coef', 0.01)
+            'entropy_coef': self.config.get('entropy_coef', 0.01),
+            'max_grad_norm': self.config.get('max_grad_norm', 0.5)
         }
         
         self.model = PPOModel(**ppo_config)
         
-        # Optimizer
+        # PPOModel creates its own optimizer, but we'll override it with our learning rate
         self.optimizer = optim.Adam(
-            self.model.parameters(),
-            lr=self.config['learning_rate'],
+            self.model.policy_net.parameters(),
+            lr=self.config.get('learning_rate', 0.0003),
             eps=1e-5
         )
+        self.model.optimizer = self.optimizer
     
     def _initialize_qmix(self):
         """Initialize QMIX model"""
@@ -213,7 +248,12 @@ class MultiAgentTrainer:
     
     def _run_episode_ppo(self, env, training=True, render=False):
         """Run episode with PPO"""
-        states = env.reset()
+        # Gymnasium API: reset() returns (observation, info)
+        states, info = env.reset()
+        
+        # Flatten the observation if it's a multi-dimensional array
+        states_flat = states.flatten()
+        
         episode_data = {
             'states': [],
             'actions': [],
@@ -225,42 +265,45 @@ class MultiAgentTrainer:
         
         total_reward = 0
         steps = 0
+        done = False
         
-        while steps < self.config['max_steps_per_episode']:
+        while steps < self.config.get('max_steps_per_episode', 1000) and not done:
             if render:
                 env.render()
                 time.sleep(0.05)
             
-            # Convert states to tensor
-            states_tensor = torch.FloatTensor(states).to(self.device)
+            # Convert states to tensor (flatten if needed)
+            states_tensor = torch.FloatTensor(states_flat).unsqueeze(0).to(self.device)
             
             # Get actions from policy
             with torch.set_grad_enabled(training):
-                actions, log_probs, values = self.model(states_tensor)
+                actions, log_probs, values = self.model.policy_net.get_action(states_tensor)
             
-            # Convert to numpy for environment
+            # Convert to numpy for environment (single action for single agent)
             if isinstance(actions, torch.Tensor):
-                actions_np = actions.cpu().numpy()
+                action = actions.cpu().numpy().item() if actions.numel() == 1 else actions.cpu().numpy()[0]
             else:
-                actions_np = actions
+                action = actions
             
             # Take step in environment
-            next_states, rewards, dones, info = env.step(actions_np)
+            # Gymnasium API: step() returns (observation, reward, terminated, truncated, info)
+            next_states, reward, terminated, truncated, info = env.step(action)
+            next_states_flat = next_states.flatten()
+            
+            # Combine terminated and truncated into done
+            done = terminated or truncated
             
             # Store data
-            episode_data['states'].append(states)
-            episode_data['actions'].append(actions_np)
-            episode_data['rewards'].append(rewards)
+            episode_data['states'].append(states_flat)
+            episode_data['actions'].append(action)
+            episode_data['rewards'].append(reward)
             episode_data['values'].append(values.cpu().numpy())
             episode_data['log_probs'].append(log_probs.cpu().numpy())
-            episode_data['dones'].append(dones)
+            episode_data['dones'].append(done)
             
-            total_reward += np.sum(rewards)
-            states = next_states
+            total_reward += reward
+            states_flat = next_states_flat
             steps += 1
-            
-            if all(dones) or steps >= self.config['max_steps_per_episode']:
-                break
         
         episode_stats = {
             'total_reward': total_reward,
@@ -274,7 +317,10 @@ class MultiAgentTrainer:
     
     def _run_episode_qmix(self, env, training=True, render=False):
         """Run episode with QMIX"""
-        states = env.reset()
+        # Gymnasium API: reset() returns (observation, info)
+        states, info = env.reset()
+        states_flat = states.flatten()
+        
         episode_data = {
             'states': [],
             'actions': [],
@@ -285,24 +331,25 @@ class MultiAgentTrainer:
         
         total_reward = 0
         steps = 0
+        done = False
         
         # Initialize RNN hidden states if using RNN
-        if self.model.use_rnn:
+        if hasattr(self.model, 'use_rnn') and self.model.use_rnn:
             hidden_states = self.model.init_hidden()
         else:
             hidden_states = None
         
-        while steps < self.config['max_steps_per_episode']:
+        while steps < self.config.get('max_steps_per_episode', 1000) and not done:
             if render:
                 env.render()
                 time.sleep(0.05)
             
             # Convert states to tensor
-            states_tensor = torch.FloatTensor(states).to(self.device)
+            states_tensor = torch.FloatTensor(states_flat).unsqueeze(0).to(self.device)
             
             # Get Q-values and actions
             with torch.set_grad_enabled(training):
-                if self.model.use_rnn:
+                if hidden_states is not None:
                     q_values, hidden_states = self.model(states_tensor, hidden_states)
                 else:
                     q_values = self.model(states_tensor)
@@ -310,37 +357,43 @@ class MultiAgentTrainer:
             # Epsilon-greedy exploration
             epsilon = self.config.get('epsilon', 0.1)
             if training and random.random() < epsilon:
-                actions = [random.randint(0, env.action_space - 1) for _ in range(env.n_agents)]
+                # For single agent, get action space size
+                if hasattr(env.action_space, 'n'):
+                    action = random.randint(0, env.action_space.n - 1)
+                else:
+                    action = random.randint(0, 5)  # Default to 6 actions
             else:
-                # Choose actions with highest Q-values
-                actions = torch.argmax(q_values, dim=1).cpu().numpy()
+                # Choose action with highest Q-value
+                action = torch.argmax(q_values).cpu().numpy().item()
             
             # Take step in environment
-            next_states, rewards, dones, info = env.step(actions)
+            # Gymnasium API: step() returns (observation, reward, terminated, truncated, info)
+            next_states, reward, terminated, truncated, info = env.step(action)
+            next_states_flat = next_states.flatten()
+            
+            # Combine terminated and truncated into done
+            done = terminated or truncated
             
             # Store data in replay buffer
-            if training:
+            if training and hasattr(self, 'replay_buffer'):
                 self.replay_buffer.push(
-                    states=states,
-                    actions=actions,
-                    rewards=rewards,
-                    next_states=next_states,
-                    dones=dones
+                    states=states_flat,
+                    actions=action,
+                    rewards=reward,
+                    next_states=next_states_flat,
+                    dones=done
                 )
             
             # Store for episode data
-            episode_data['states'].append(states)
-            episode_data['actions'].append(actions)
-            episode_data['rewards'].append(rewards)
-            episode_data['next_states'].append(next_states)
-            episode_data['dones'].append(dones)
+            episode_data['states'].append(states_flat)
+            episode_data['actions'].append(action)
+            episode_data['rewards'].append(reward)
+            episode_data['next_states'].append(next_states_flat)
+            episode_data['dones'].append(done)
             
-            total_reward += np.sum(rewards)
-            states = next_states
+            total_reward += reward
+            states_flat = next_states_flat
             steps += 1
-            
-            if all(dones) or steps >= self.config['max_steps_per_episode']:
-                break
         
         episode_stats = {
             'total_reward': total_reward,
@@ -363,36 +416,22 @@ class MultiAgentTrainer:
     
     def _update_ppo(self, episode_data):
         """Update PPO model"""
-        # Calculate advantages
-        rewards = np.array(episode_data['rewards'])
-        values = np.array(episode_data['values'])
-        dones = np.array(episode_data['dones'])
+        # PPOModel.update expects a batch dict with specific keys
+        # and will compute GAE internally
         
-        # Compute returns and advantages
-        returns, advantages = self.model.compute_gae(
-            rewards=rewards,
-            values=values,
-            dones=dones,
-            gamma=self.config.get('gamma', 0.99),
-            gae_lambda=self.config.get('gae_lambda', 0.95)
-        )
+        # Prepare batch dictionary
+        batch = {
+            'states': np.array(episode_data['states']),
+            'actions': np.array(episode_data['actions']),
+            'logprobs': np.array(episode_data['log_probs']).squeeze(),
+            'rewards': np.array(episode_data['rewards']),
+            'dones': np.array(episode_data['dones']),
+            'values': np.array(episode_data['values']).squeeze()
+        }
         
-        # Convert to tensors
-        states_tensor = torch.FloatTensor(np.array(episode_data['states'])).to(self.device)
-        actions_tensor = torch.FloatTensor(np.array(episode_data['actions'])).to(self.device)
-        old_log_probs_tensor = torch.FloatTensor(np.array(episode_data['log_probs'])).to(self.device)
-        returns_tensor = torch.FloatTensor(returns).to(self.device)
-        advantages_tensor = torch.FloatTensor(advantages).to(self.device)
-        
-        # PPO update
+        # PPO update (it will handle tensor conversion and GAE computation internally)
         losses = self.model.update(
-            states=states_tensor,
-            actions=actions_tensor,
-            old_log_probs=old_log_probs_tensor,
-            returns=returns_tensor,
-            advantages=advantages_tensor,
-            optimizer=self.optimizer,
-            clip_epsilon=self.config.get('clip_epsilon', 0.2),
+            batch=batch,
             n_epochs=self.config.get('ppo_epochs', 4),
             batch_size=self.config.get('batch_size', 32)
         )
@@ -432,7 +471,7 @@ class MultiAgentTrainer:
         """Save model checkpoint"""
         checkpoint = {
             'episode': episode,
-            'model_state_dict': self.model.state_dict(),
+            'model_state_dict': self.model.policy_net.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'score': score,
             'config': self.config,
@@ -459,11 +498,14 @@ class MultiAgentTrainer:
         
         with zipfile.ZipFile(zip_path, 'w') as zipf:
             # Save model architecture and weights
+            obs_space = self.train_env.observation_space
+            action_space = self.train_env.action_space
+            
             model_info = {
                 'algorithm': self.config['algorithm'],
                 'n_agents': self.config['n_agents'],
-                'obs_dim': self.train_env.observation_space,
-                'action_dim': self.train_env.action_space,
+                'obs_dim': list(obs_space.shape) if hasattr(obs_space, 'shape') else obs_space,
+                'action_dim': action_space.n if hasattr(action_space, 'n') else action_space,
                 'episode': episode,
                 'score': score,
                 'timestamp': time.strftime("%Y%m%d-%H%M%S")
@@ -475,7 +517,7 @@ class MultiAgentTrainer:
             
             # Save model weights
             model_weights_path = f"temp_model_weights.pt"
-            torch.save(self.model.state_dict(), model_weights_path)
+            torch.save(self.model.policy_net.state_dict(), model_weights_path)
             zipf.write(model_weights_path, 'model_weights.pt')
             os.remove(model_weights_path)
             
@@ -499,7 +541,7 @@ class MultiAgentTrainer:
         """Load model checkpoint"""
         if os.path.exists(checkpoint_path):
             checkpoint = torch.load(checkpoint_path, map_location=self.device)
-            self.model.load_state_dict(checkpoint['model_state_dict'])
+            self.model.policy_net.load_state_dict(checkpoint['model_state_dict'])
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             self.episode = checkpoint['episode']
             self.best_score = checkpoint.get('best_score', -float('inf'))
@@ -523,7 +565,7 @@ class MultiAgentTrainer:
         
         for ep in range(n_episodes):
             # Set model to evaluation mode
-            self.model.eval()
+            self.model.policy_net.eval()
             
             # Run test episode
             with torch.no_grad():
@@ -537,7 +579,7 @@ class MultiAgentTrainer:
                   f"Steps={episode_stats['steps']}, Success={episode_stats['success']}")
         
         # Set back to training mode
-        self.model.train()
+        self.model.policy_net.train()
         
         test_results = {
             'mean_score': np.mean(test_scores),

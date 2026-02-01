@@ -73,6 +73,7 @@ class BaseAgent:
         Check if the move is valid
         - Within grid bounds
         - Not moving into blocked cells
+        - Ground vehicles (non-drones) cannot move through buildings
         """
         x, y = position
         grid_size = grid.shape[0]
@@ -80,11 +81,27 @@ class BaseAgent:
         # Check bounds
         if x < 0 or x >= grid_size or y < 0 or y >= grid_size:
             return False
-            
-        # Check if cell is blocked
-        blocked_type = self.config['environment']['cell_types']['BLOCKED']
-        if grid[y, x] == blocked_type:
+        
+        cell_types = self.config['environment']['cell_types']
+        current_cell = grid[int(y), int(x)]  # Ensure integer indices
+        
+        # Check if cell is blocked (blocked roads)
+        if current_cell == cell_types.get('BLOCKED', -1):
             return False
+        
+        # Ground vehicles (ambulances, rescue teams) cannot move through buildings
+        # Only drones can fly over buildings
+        if self.agent_type != 'drone':
+            # Ground vehicles can only move on: ROAD, HOSPITAL, OPEN_SPACE, COLLAPSED (to rescue)
+            allowed_cells = [
+                cell_types.get('ROAD', 1),
+                cell_types.get('HOSPITAL', 4),
+                cell_types.get('OPEN_SPACE', 3),
+                cell_types.get('COLLAPSED', -1)  # Can access collapsed buildings to rescue
+            ]
+            
+            if current_cell not in allowed_cells:
+                return False
             
         return True
     

@@ -1210,14 +1210,19 @@ class DisasterResponseDashboard:
             valid_spots = []
             
             # Check if environment has grid
-            if hasattr(env, 'grid'):
-                # Find all cells that are ROAD (1) or OPEN_SPACE (3)
+            if hasattr(env, 'grid') and hasattr(env, 'cell_types'):
+                cell_types = env.cell_types
+                # Find all cells that are ROAD, OPEN_SPACE, or HOSPITAL (valid for ground vehicles)
                 for y in range(grid_size):
                     for x in range(grid_size):
                         if y < grid_size and x < grid_size:  # Safety check
                             cell_value = env.grid[y, x]
-                            # Assuming 1=Road, 3=Open. Adjust if your config is different.
-                            if cell_value == 1 or cell_value == 3: 
+                            # Use actual cell_types from config
+                            if cell_value in [
+                                cell_types.get('ROAD', 1),
+                                cell_types.get('OPEN_SPACE', 3),
+                                cell_types.get('HOSPITAL', 4)
+                            ]:
                                 valid_spots.append(np.array([x, y]))
             else:
                 # If no grid, create some default positions

@@ -3,6 +3,11 @@ from .base_agent import BaseAgent
 class AmbulanceAgent(BaseAgent):
     """
     Ambulance agent for transporting multiple civilians
+    
+    Movement Restrictions:
+    - Ground vehicle - CANNOT move through buildings
+    - Can only move on: roads, hospitals, open spaces, collapsed buildings
+    - Higher capacity than drones for civilian transport
     """
     
     def __init__(self, agent_id, position, config):

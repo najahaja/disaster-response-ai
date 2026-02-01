@@ -3,6 +3,11 @@ from .base_agent import BaseAgent
 class RescueTeamAgent(BaseAgent):
     """
     Rescue team agent for complex rescue operations
+    
+    Movement Restrictions:
+    - Ground vehicle - CANNOT move through buildings
+    - Can only move on: roads, hospitals, open spaces, collapsed buildings
+    - Specialized in rescuing civilians from collapsed buildings
     """
     
     def __init__(self, agent_id, position, config):

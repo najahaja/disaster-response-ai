@@ -22,10 +22,19 @@ class SimpleGridEnv(gym.Env):
     Simple grid-based environment for disaster response simulation
     """
     
-    def __init__(self, grid_size=None, config_path="config.yaml"):
+    def __init__(self, grid_size=None, config_path="config.yaml", 
+                 n_drones=1, n_ambulances=1, n_rescue_teams=1, 
+                 spawn_civilians=True, n_civilians=None):
         # Load configuration
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
+        
+        # Training configuration
+        self.n_drones = n_drones
+        self.n_ambulances = n_ambulances
+        self.n_rescue_teams = n_rescue_teams
+        self.spawn_civilians = spawn_civilians
+        self.n_civilians = n_civilians  # If None, uses config default
         
         # Gymnasium required attributes
         self.metadata = {'render_modes': ['human', 'rgb_array'], 'render_fps': 10}
@@ -137,23 +146,55 @@ class SimpleGridEnv(gym.Env):
         self.blocked_roads = []
         
         self.initialize_grid()
+        
+        # Dynamically create agents based on configuration
         try:
-            # You can place them at hospitals or other known safe spots
-            # Inside your reset() method
-            self.add_agent(DroneAgent(agent_id="drone_0", position=[1, 1], config=self.config))
-            self.add_agent(AmbulanceAgent(agent_id="ambulance_0", position=[1, self.grid_size-2], config=self.config))
-            self.add_agent(RescueTeamAgent(agent_id="rescue_team_0", position=[self.grid_size-2, 1], config=self.config))
-            # self.add_agent(BaseAgent(agent_id="base_0", position=[self.grid_size-2, 1], config=self.config))
+            agent_id = 0
+            
+            # Add drones
+            for i in range(self.n_drones):
+                pos = [1 + i*2, 1 + i*2] if i > 0 else [1, 1]
+                self.add_agent(DroneAgent(agent_id=f"drone_{i}", position=pos, config=self.config))
+            
+            # Add ambulances
+            for i in range(self.n_ambulances):
+                pos = [1 + i*2, self.grid_size-2 - i*2] if i > 0 else [1, self.grid_size-2]
+                self.add_agent(AmbulanceAgent(agent_id=f"ambulance_{i}", position=pos, config=self.config))
+            
+            # Add rescue teams
+            for i in range(self.n_rescue_teams):
+                pos = [self.grid_size-2 - i*2, 1 + i*2] if i > 0 else [self.grid_size-2, 1]
+                self.add_agent(RescueTeamAgent(agent_id=f"rescue_team_{i}", position=pos, config=self.config))
         
         except NameError as e:
             print(f"ERROR: You forgot to import an agent class. {e}")
-            # ... (error message) ...
 
-        # 3. Trigger disaster (this creates civilians)
-        # self.trigger_disaster()
+        # Trigger disaster to spawn civilians (if enabled)
+        if self.spawn_civilians:
+            self.trigger_disaster()
+            
+            # If specific number of civilians requested, adjust
+            if self.n_civilians is not None and len(self.civilians) != self.n_civilians:
+                # Trim or add civilians to match requested count
+                if len(self.civilians) > self.n_civilians:
+                    self.civilians = self.civilians[:self.n_civilians]
+                elif len(self.civilians) < self.n_civilians:
+                    # Add more civilians at random building locations
+                    while len(self.civilians) < self.n_civilians:
+                        x, y = random.randint(0, self.grid_size-1), random.randint(0, self.grid_size-1)
+                        if self.grid[y, x] == self.cell_types['BUILDING']:
+                            self.civilians.append({
+                                'position': np.array([x, y]),
+                                'rescued': False,
+                                'health': 100
+                            })
+        
         # Return observation and info
         observation = self._get_gym_observation()
-        info = {}
+        info = {
+            'n_agents': len(self.agents),
+            'n_civilians': len(self.civilians)
+        }
         
         return observation, info
     
@@ -183,6 +224,7 @@ class SimpleGridEnv(gym.Env):
                 agent = self.agents[agent_id]
                 action_str = self._decode_action(action)
                 agent.move(action_str, self.grid)
+        
         # Check for civilian rescues
         self._check_civilian_rescues()
         # Calculate rewards
@@ -235,7 +277,7 @@ class SimpleGridEnv(gym.Env):
     
     def _check_civilian_rescues(self):
         """Check if any agents have rescued civilians"""
-        for civilian in self.civilians:
+        for i, civilian in enumerate(self.civilians):
             if not civilian['rescued']:
                 civ_pos = civilian['position']
                 for agent in self.agents.values():
@@ -247,6 +289,91 @@ class SimpleGridEnv(gym.Env):
     def _all_civilians_rescued(self):
         """Check if all civilians have been rescued"""
         return all(civ['rescued'] for civ in self.civilians) if self.civilians else False
+    
+    def _update_agent_coordination(self):
+        """
+        Update agent coordination through communication hub
+        - Drones scout and report civilian locations
+        - Ground vehicles receive coordinates and navigate to rescue
+        """
+        for agent_id, agent in self.agents.items():
+            # Drones automatically scout and report civilians
+            if agent.agent_type == 'drone':
+                self._drone_scout_and_report(agent)
+            
+            # Ground vehicles check for rescue assignments
+            elif agent.agent_type in ['ambulance', 'rescue_team']:
+                self._ground_vehicle_coordination(agent)
+    
+    def _drone_scout_and_report(self, drone):
+        """
+        Drone scouts for civilians and reports to communication hub
+        """
+        scout_range = getattr(drone, 'scout_range', 3)
+        drone_x, drone_y = drone.position
+        
+        # Check for civilians in scout range
+        for i, civilian in enumerate(self.civilians):
+            if civilian['rescued']:
+                continue
+            
+            civ_x, civ_y = civilian['position']
+            distance = np.linalg.norm(drone.position - civilian['position'])
+            
+            if distance <= scout_range:
+                # Check if civilian is in a building
+                cell_type = self.grid[civ_y, civ_x]
+                in_building = (cell_type == self.cell_types['BUILDING'] or 
+                             cell_type == self.cell_types.get('COLLAPSED', -1))
+                
+                # Report to communication hub
+                civilian_id = f"civ_{i}"
+                reported = self.comm_hub.report_civilian_location(
+                    civilian_id=civilian_id,
+                    position=[civ_x, civ_y],
+                    discovered_by_agent=drone.agent_id
+                )
+                
+                if reported:
+                    # Broadcast discovery message
+                    self.comm_hub.broadcast_message(
+                        sender_id=drone.agent_id,
+                        message_type='civilian_found',
+                        content={
+                            'civilian_id': civilian_id,
+                            'position': [civ_x, civ_y],
+                            'in_building': in_building,
+                            'health': civilian.get('health', 100)
+                        }
+                    )
+    
+    def _ground_vehicle_coordination(self, agent):
+        """
+        Ground vehicles receive civilian coordinates and navigate to rescue
+        """
+        # Check for nearest unassigned civilian
+        nearest_civ = self.comm_hub.get_nearest_unassigned_civilian(
+            agent_position=agent.position.tolist(),
+            agent_type=agent.agent_type
+        )
+        
+        if nearest_civ:
+            # Assign this civilian to the agent
+            self.comm_hub.assign_civilian_to_agent(
+                civilian_id=nearest_civ['civilian_id'],
+                agent_id=agent.agent_id
+            )
+            
+            # Store target in agent (for pathfinding)
+            agent.target_civilian = nearest_civ
+    
+    def get_coordination_info(self):
+        """Get current coordination status"""
+        return {
+            'discovered_civilians': self.comm_hub.get_all_discovered_civilians(),
+            'pending_requests': self.comm_hub.get_pending_rescue_requests(),
+            'stats': self.comm_hub.get_coordination_stats()
+        }
     def get_observation(self):
         """Get current observation of the environment (original method)"""
         return {
@@ -258,14 +385,45 @@ class SimpleGridEnv(gym.Env):
         }
     
     def calculate_rewards(self):
-        """Calculate rewards for each agent"""
+        """Calculate rewards with better balancing"""
         rewards = {}
+        
         for agent_id, agent in self.agents.items():
-            # Simple reward structure
-            reward = agent.civilians_rescued * 100  # +100 per civilian rescued
-            reward -= 1  # -1 per step to encourage efficiency
-            reward -= agent.steps_taken * 0.1  # Small penalty for moving too much
-            rewards[agent_id] = reward
+            total_reward = 0
+            
+            # 1. BIG reward for rescuing civilians
+            total_reward += agent.civilians_rescued * 100
+            
+            # 2. SMALL penalty per step (encourage efficiency but not too punishing)
+            total_reward -= 0.1  # Reduced from -1
+            
+            # 3. REWARD for moving toward civilians (if any civilians exist)
+            if self.civilians and len(self.civilians) > 0:
+                # Find nearest civilian
+                min_distance = float('inf')
+                for civilian in self.civilians:
+                    if not civilian['rescued']:
+                        dist = np.linalg.norm(agent.position - civilian['position'])
+                        min_distance = min(min_distance, dist)
+                
+                # Reward for getting closer to civilians
+                if hasattr(agent, 'last_distance'):
+                    if min_distance < agent.last_distance:
+                        total_reward += 0.5  # Reward for moving closer
+                    agent.last_distance = min_distance
+                else:
+                    agent.last_distance = min_distance
+            
+            # 4. SMALL penalty for hitting walls/blocked cells
+            # (This is handled by agent.move() returning False)
+            
+            # 5. BONUS for discovering new areas (drones only)
+            if agent.agent_type == 'drone' and hasattr(agent, 'scouted_locations'):
+                new_scouts = len(agent.scouted_locations) * 0.01
+                total_reward += new_scouts
+            
+            rewards[agent_id] = total_reward
+        
         return rewards
     
     def render(self):

@@ -1,0 +1,50 @@
+{
+  "experiment_name": "disaster_response_training",
+  "seed": 42,
+  "use_gpu": true,
+
+  "train_grid_size": 36,
+  "env_config_path": "config.yaml",
+
+  "algorithm": "ppo",
+  "n_agents": 3,
+  "total_episodes": 1000,
+  "max_steps_per_episode": 1000,
+
+  "n_drones": 1,
+  "n_ambulances": 1,
+  "n_rescue_teams": 1,
+  "spawn_civilians": true,
+  "n_civilians": 5,
+
+  "learning_rate": 0.0003,
+  "gamma": 0.99,
+  "gae_lambda": 0.95,
+
+  "ppo_epochs": 4,
+  "clip_epsilon": 0.2,
+  "value_coef": 0.5,
+  "entropy_coef": 0.01,
+  "batch_size": 32,
+
+  "hidden_dim": 128,
+  "n_layers": 2,
+  "use_lstm": false,
+
+  "replay_buffer_size": 10000,
+  "target_update_freq": 200,
+
+  "print_freq": 10,
+  "save_freq": 100,
+  "test_freq": 50,
+  "test_during_training": true,
+  "target_success_rate": 0.95,
+
+  "lr_decay": 0.99,
+  "lr_decay_freq": 1000,
+
+  "use_real_map_for_testing": false,
+  "map_file": null,
+  "use_physics": false,
+  "sensor_noise": 0.0
+}

@@ -26,10 +26,19 @@ class RealMapEnv(SimpleGridEnv):
     Real map environment that uses OpenStreetMap data or falls back to generated maps
     """
     
-    def __init__(self, location_name=None, config_path="config.yaml"):
+    def __init__(self, location_name=None, config_path="config.yaml",
+                 n_drones=1, n_ambulances=1, n_rescue_teams=1,
+                 spawn_civilians=True, n_civilians=None):
         # 1. Load configuration (Always first)
         with open(config_path, 'r') as f:
             self.config = yaml.safe_load(f)
+        
+        # Store agent configuration (same as SimpleGridEnv)
+        self.n_drones = n_drones
+        self.n_ambulances = n_ambulances
+        self.n_rescue_teams = n_rescue_teams
+        self.spawn_civilians = spawn_civilians
+        self.n_civilians = n_civilians
         
         # 2. Gymnasium required attributes
         self.metadata = {'render_modes': ['human', 'rgb_array'], 'render_fps': 10}
