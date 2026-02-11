@@ -457,9 +457,9 @@ class DisasterResponseDashboard:
             st.subheader("🔧 Simulation Mode")
             mode = st.selectbox(
                 "Select Mode",
-                options=["Basic", "Advanced", "Training"],
+                options=["Basic", "Training"],
                 index=0,
-                help="Basic: Simple simulation\nAdvanced: Full features\nTraining: ML training mode",
+                help="Basic: Simple simulation\nTraining: ML training mode",
                 disabled=st.session_state.user_role == "viewer"  # Disable for viewer
             )
             st.session_state.simulation_mode = mode.lower()

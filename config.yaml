@@ -1,7 +1,7 @@
 environment:
-  grid_size: 36
+  grid_size: 33
   cell_size: 15
-  max_steps: 10000
+  max_steps: 6500
 
   # --- FIX 1: Merged into ONE block ---
   cell_types:
@@ -19,18 +19,16 @@ agents:
     speed: 2
     capacity: 1
     color: [0, 191, 255]
-
   ambulance:
     count: 2
     speed: 1
     capacity: 5
     color: [255, 0, 0]
-
   rescue_team:
     count: 1
     speed: 1
     capacity: 3
-    color: [122, 250, 42]
+    color: [0, 255, 0] # Bright Green (Lime)
 
 disaster:
   collapsed_buildings: 10
