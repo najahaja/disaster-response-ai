@@ -1,21 +1,69 @@
-MIT License
+Copyright (c) 2026 Ahamed Najah & Shammaz Farees
+All Rights Reserved.
 
-Copyright (c) 2025
+PROPRIETARY LICENSE
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This software and associated documentation files (the "Software") are the
+exclusive property of Ahamed Najah and Shammaz Farees (the "Copyright Holders").
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+TERMS AND CONDITIONS:
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+1. VIEWING RIGHTS
+   The Software is made publicly available for viewing and educational purposes only.
+   This does NOT grant any rights to use, copy, modify, or distribute the Software.
+
+2. RESTRICTIONS
+   You may NOT:
+   - Copy, reproduce, or duplicate the Software in any form
+   - Modify, adapt, translate, or create derivative works based on the Software
+   - Distribute, sublicense, lease, sell, or transfer the Software to any third party
+   - Use the Software for commercial purposes
+   - Remove or alter any copyright notices or proprietary legends
+   - Reverse engineer, decompile, or disassemble the Software
+
+3. PERMITTED USE
+   Without explicit written permission from the Copyright Holders, you may ONLY:
+   - View the source code for educational and reference purposes
+   - Study the implementation for academic learning
+
+4. PERMISSION REQUESTS
+   To request permission for any use beyond viewing, including but not limited to:
+   - Academic research collaboration
+   - Commercial use
+   - Derivative works
+   - Distribution or sharing
+
+   Contact the Copyright Holders at:
+   - Ahamed Najah: najahaja00@gmail.com
+   - Shammaz Farees: shammas.mfm@gmail.com
+
+5. NO WARRANTY
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+   WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF
+   OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+
+6. ACADEMIC CONTEXT
+   This Software was developed as a Final Year Project (FYP) at:
+   - University of Lahore (UOL)
+   - Computer Engineering Department
+   - Project Supervisor: Engr. Dr. Wasim Nawaz
+   - Project Coordinator: Engr. Dr. Muhammad Afzal
+
+7. TERMINATION
+   Any unauthorized use of this Software will result in immediate termination of
+   viewing rights and may result in legal action.
+
+8. GOVERNING LAW
+   This license shall be governed by and construed in accordance with the laws
+   of Pakistan.
+
+For all inquiries, permissions, or questions regarding this license:
+
+- Ahamed Najah: najahaja00@gmail.com
+- Shammaz Farees: shammas.mfm@gmail.com
+
+Last Updated: February 12, 2026

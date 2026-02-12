@@ -3,7 +3,7 @@
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0%2B-red.svg)](https://pytorch.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.28%2B-FF4B4B.svg)](https://streamlit.io/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-All%20Rights%20Reserved-red.svg)](LICENSE)
 
 > **Final Year Project (FYP)** - An intelligent multi-agent disaster response simulation system using reinforcement learning for coordinated rescue operations.
 
@@ -706,7 +706,9 @@ streamlit cache clear
 
 ### Getting Help
 
-- 📧 Email: [your-email@example.com]
+- 📧 **Email**:
+  - Ahamed Najah: [najahaja00@gmail.com](mailto:najahaja00@gmail.com)
+  - Shammaz Farees: [shammas.mfm@gmail.com](mailto:shammas.mfm@gmail.com)
 - 💬 GitHub Discussions
 - 📚 Documentation Wiki
 
@@ -714,23 +716,28 @@ streamlit cache clear
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+**All Rights Reserved**
+
+This project is proprietary and confidential. Unauthorized copying, distribution, modification, or use of this software, via any medium, is strictly prohibited without explicit written permission from the project maintainers.
 
 ```
-MIT License
+Copyright (c) 2026 Ahamed Najah & Shammaz Farees
+All Rights Reserved.
 
-Copyright (c) 2026 Disaster Response AI Team
+This software and associated documentation files (the "Software") are the
+property of Ahamed Najah and Shammaz Farees. The Software is provided for
+viewing purposes only.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Unauthorized copying, modification, distribution, or use of this Software,
+via any medium, is strictly prohibited without prior written permission
+from the copyright holders.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+For permissions and inquiries, contact:
+- Ahamed Najah: najahaja00@gmail.com
+- Shammaz Farees: shammas.mfm@gmail.com
 ```
+
+See the [LICENSE](LICENSE) file for complete terms.
 
 ---
 
@@ -758,16 +765,23 @@ copies or substantial portions of the Software.
 
 ### Special Thanks
 
-- University of London (UOL) - Computer Science Department
-- Project Supervisor: [Supervisor Name]
-- FYP Coordinator: [Coordinator Name]
+- **University of Lahore (UOL)** - Computer Engineering Department
+- **Project Supervisor**: Engr. Dr. Wasim Nawaz
+- **Project Coordinator**: Engr. Dr. Muhammad Afzal
 
 ---
 
 ## 📞 Contact
 
-**Project Maintainer**: Shammaz Farees  
-**GitHub**: [@ShammazFarees](https://github.com/ShammazFarees)  
+**Project Maintainers**:
+
+- **Ahamed Najah**
+  - Email: [najahaja00@gmail.com](mailto:najahaja00@gmail.com)
+  - GitHub: [@AhamedNajah](https://github.com/AhamedNajah)
+- **Shammaz Farees**
+  - Email: [shammas.mfm@gmail.com](mailto:shammas.mfm@gmail.com)
+  - GitHub: [@ShammazFarees](https://github.com/ShammazFarees)
+
 **Repository**: [disaster-response-ai](https://github.com/ShammazFarees/disaster-response-ai)
 
 ---
