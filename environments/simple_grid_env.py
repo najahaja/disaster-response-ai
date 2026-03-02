@@ -6,13 +6,14 @@ import yaml
 import random
 import sys
 import os
+
+# Add parent directory to path to import from agents and utils
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from agents.drone_agent import DroneAgent
 from agents.ambulance_agent import AmbulanceAgent
 from agents.rescue_team_agent import RescueTeamAgent
 from agents.base_agent import BaseAgent
-
-# Add parent directory to path to import from utils
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from environments.utils.visualization import VisualizationUtils
 from environments.utils.disaster_generator import DisasterGenerator
@@ -100,8 +101,8 @@ class SimpleGridEnv(gym.Env):
         
         # We are using this with Streamlit, so we force headless mode
         # by not calling pygame.display.set_mode()
-        width = self.grid_size * self.cell_size + 210
-        height = self.grid_size * self.cell_size + 10
+        width = self.grid_size * self.cell_size + 250
+        height = self.grid_size * self.cell_size
         
         # This creates a "virtual" screen (a Surface) that doesn't open a window
         self.screen = pygame.Surface((width, height)) 

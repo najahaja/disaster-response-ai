@@ -1,5 +1,5 @@
 environment:
-  grid_size: 33
+  grid_size: 36
   cell_size: 15
   max_steps: 6500
 
