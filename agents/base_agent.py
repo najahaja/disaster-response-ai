@@ -89,16 +89,18 @@ class BaseAgent:
         if self.agent_type == 'drone':
             return True  # Drones can move anywhere within bounds
         
-        # GROUND VEHICLES (ambulances, rescue teams) have movement restrictions
-        # They can only move on: ROAD, HOSPITAL, OPEN_SPACE/EMPTY, COLLAPSED (to rescue)
-        # They CANNOT move through: BUILDING, BLOCKED roads
+        # GROUND VEHICLES (ambulances, rescue teams) have specific movement restrictions
         allowed_cells = [
             cell_types.get('ROAD', 1),
             cell_types.get('HOSPITAL', 2),
             cell_types.get('EMPTY', 3),  # OPEN_SPACE
             cell_types.get('OPEN_SPACE', 3),  # Alternative name
-            cell_types.get('COLLAPSED', 4)  # Can access collapsed buildings to rescue
         ]
+        
+        # RESCUE TEAMS and can access collapsed buildings
+        if self.agent_type == 'rescue_team':
+            allowed_cells.append(cell_types.get('COLLAPSED', 4))
+            
         
         if current_cell not in allowed_cells:
             return False

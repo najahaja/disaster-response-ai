@@ -6,7 +6,7 @@ class AmbulanceAgent(BaseAgent):
     
     Movement Restrictions:
     - Ground vehicle - CANNOT move through buildings
-    - Can only move on: roads, hospitals, open spaces, collapsed buildings
+    - Can only move on: roads, hospitals, open spaces
     - Higher capacity than drones for civilian transport
     """
     
