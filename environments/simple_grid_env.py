@@ -102,7 +102,7 @@ class SimpleGridEnv(gym.Env):
         # We are using this with Streamlit, so we force headless mode
         # by not calling pygame.display.set_mode()
         width = self.grid_size * self.cell_size + 250
-        height = self.grid_size * self.cell_size
+        height = self.grid_size * self.cell_size +10
         
         # This creates a "virtual" screen (a Surface) that doesn't open a window
         self.screen = pygame.Surface((width, height)) 
