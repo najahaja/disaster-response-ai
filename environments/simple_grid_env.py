@@ -14,6 +14,7 @@ from agents.drone_agent import DroneAgent
 from agents.ambulance_agent import AmbulanceAgent
 from agents.rescue_team_agent import RescueTeamAgent
 from agents.base_agent import BaseAgent
+from agents.communication_hub import CommunicationHub
 
 from environments.utils.visualization import VisualizationUtils
 from environments.utils.disaster_generator import DisasterGenerator
@@ -145,6 +146,7 @@ class SimpleGridEnv(gym.Env):
         self.civilians = []
         self.collapsed_buildings = []
         self.blocked_roads = []
+        self.comm_hub = CommunicationHub()
         
         self.initialize_grid()
         

@@ -16,9 +16,15 @@ import time
 import logging
 import traceback
 import hashlib
+import threading
 
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+try:
+    from blockchain.blockchain_logger import BlockchainLogger
+except:
+    pass
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -242,7 +248,11 @@ class DisasterResponseDashboard:
             'simulation_mode': 'basic',  # 'basic', 'advanced', 'training'
             'auto_save': True,
             'last_save_time': None,
-            'session_id': datetime.now().strftime("%Y%m%d_%H%M%S")
+            'session_id': datetime.now().strftime("%Y%m%d_%H%M%S"),
+            'blockchain_logger': None,
+            'logged_discoveries': set(),
+            'logged_rescues': set(),
+            'blockchain_history': []
         }
         
         for key, value in default_state.items():
@@ -255,6 +265,14 @@ class DisasterResponseDashboard:
             self.control_panel = ControlPanel()
             self.metrics_display = MetricsDisplay()
             self.simulation_viewer = SimulationViewer()
+            
+            if st.session_state.get('blockchain_logger') is None:
+                try:
+                    from blockchain.blockchain_logger import BlockchainLogger
+                    st.session_state.blockchain_logger = BlockchainLogger()
+                except Exception as e:
+                    logger.warning(f"Failed to initialize Blockchain Logger: {e}")
+            
             logger.info("Dashboard components initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize dashboard components: {e}")
@@ -737,7 +755,7 @@ class DisasterResponseDashboard:
     def render_enhanced_simulation_dashboard(self):
         """Render enhanced simulation dashboard"""
         # Main simulation view with tabs
-        tab1, tab2, tab3, tab4 = st.tabs(["🎯 Live View", "📈 Analytics", "🤖 Agents", "📋 Logs"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["🎯 Live View", "📈 Analytics", "🤖 Agents", "📋 Logs", "🔗 Blockchain"])
         
         with tab1:
             self.render_enhanced_simulation_view()
@@ -750,7 +768,26 @@ class DisasterResponseDashboard:
         
         with tab4:
             self.render_simulation_logs()
-    
+            
+        with tab5:
+            self.render_blockchain_logs()
+            
+        # VERY IMPORTANT: Only advance simulation and rerun AFTER all tabs have been fully rendered!
+        if st.session_state.environment and st.session_state.simulation_running:
+            self.advance_simulation()
+            st.rerun()
+            
+    def render_blockchain_logs(self):
+        """Render the Web3 Blockchain Logs directly on the dashboard"""
+        st.subheader("🔗 Immutable Blockchain Audit Trail")
+        st.info("These logs represent real Smart Contract transactions on your Ganache node.")
+        history = st.session_state.get('blockchain_history', [])
+        if not history:
+            st.write("No events logged yet. Trigger a disaster and wait for your AI to find civilians!")
+        else:
+            for log in reversed(history):
+                st.code(log, language="bash")
+                
     def render_enhanced_simulation_view(self):
         """Render the live simulation (full‑width map + controls below)."""
         # Display role-based message
@@ -771,10 +808,6 @@ class DisasterResponseDashboard:
                 # Show the latest frame
                 self.simulation_viewer.render(image_placeholder)
 
-                # Advance the simulation *and* trigger a rerun so the next frame appears
-                if st.session_state.simulation_running:
-                    self.advance_simulation()
-                    st.rerun()          # <-- crucial line
             except Exception as e:
                 self.handle_error(f"Visualization error: {e}")
                 st.error("❌ Failed to render simulation view")
@@ -835,6 +868,32 @@ class DisasterResponseDashboard:
             # --- Step the Environment ---
             obs, reward, terminated, truncated, info = env.step(actions)
             
+            # --- Check Blockchain Logs asynchronously ---
+            if st.session_state.get('blockchain_logger'):
+                try:
+                    for i, c in enumerate(getattr(env, 'civilians', [])):
+                        civ_id = c.get('id', f'civ_{i}')
+                        pos = c.get('position', [0,0])
+                        loc_str = f"x:{int(pos[0])}, y:{int(pos[1])}"
+                        
+                        # Discovered
+                        if c.get('found', False) and civ_id not in st.session_state.logged_discoveries:
+                            threading.Thread(target=st.session_state.blockchain_logger.log_event, 
+                                             args=("Drone", "SURVIVOR_DISCOVERED", loc_str)).start()
+                            st.session_state.logged_discoveries.add(civ_id)
+                            st.session_state.blockchain_history.append(f"[{datetime.now().strftime('%H:%M:%S')}] [Action: SURVIVOR_DISCOVERED] Agent: Drone Location: {loc_str}")
+                            st.session_state["blockchain_history"] = st.session_state.blockchain_history[:]
+                            
+                        # Rescued
+                        if c.get('rescued', False) and civ_id not in st.session_state.logged_rescues:
+                            threading.Thread(target=st.session_state.blockchain_logger.log_event, 
+                                             args=("Ambulance", "SURVIVOR_RESCUED", loc_str)).start()
+                            st.session_state.logged_rescues.add(civ_id)
+                            st.session_state.blockchain_history.append(f"[{datetime.now().strftime('%H:%M:%S')}] [Action: SURVIVOR_RESCUED] Agent: Ambulance Location: {loc_str}")
+                            st.session_state["blockchain_history"] = st.session_state.blockchain_history[:]
+                except Exception as e:
+                    print(f"Blockchain logging error: {e}")
+            
             # --- Update Data ---
             self.update_simulation_data()
             
@@ -853,8 +912,7 @@ class DisasterResponseDashboard:
             
             time.sleep(1.0 / st.session_state.simulation_speed)
             
-            # --- CRITICAL: FORCE RERUN ---
-            st.rerun()
+            # --- Note: We no longer st.rerun() here to allow the caller to finish rendering before restarting. ---
             
         except Exception as e:
             print("CRITICAL SIMULATION ERROR:")

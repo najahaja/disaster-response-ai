@@ -8,6 +8,7 @@ sys.path.append('.')
 
 from environments.simple_grid_env import SimpleGridEnv
 import time
+from blockchain.blockchain_logger import BlockchainLogger
 
 def demonstrate_coordination():
     print("=" * 70)
@@ -33,6 +34,17 @@ def demonstrate_coordination():
     print(f"   - Grid size: {env.grid_size}x{env.grid_size}")
     print(f"   - Agents: {len(env.agents)}")
     print(f"   - Civilians: {len(env.civilians)}")
+    
+    print(f"\n🔗 Connecting to Blockchain...")
+    try:
+        logger = BlockchainLogger()
+        print("   ✅ Blockchain Logger Initialized!")
+    except Exception as e:
+        print(f"   ❌ Failed to initialize Blockchain Logger: {e}")
+        logger = None
+        
+    logged_discoveries = set()
+    logged_rescues = set()
     
     # Show initial agent positions
     print(f"\n📍 Initial Agent Positions:")
@@ -79,6 +91,17 @@ def demonstrate_coordination():
                 discovered_by = civ_data['discovered_by']
                 assigned_to = civ_data.get('assigned_to', 'None')
                 print(f"    - {civ_id}: {status} (found by {discovered_by}, assigned to {assigned_to})")
+                
+                pos = civ_data.get('position', (0,0))
+                loc_str = f"x:{pos[0]}, y:{pos[1]}"
+                
+                if logger and civ_id not in logged_discoveries:
+                    logger.log_event(str(discovered_by), "SURVIVOR_DISCOVERED", loc_str)
+                    logged_discoveries.add(civ_id)
+                
+                if logger and status == 'rescued' and civ_id not in logged_rescues:
+                    logger.log_event(str(assigned_to), "SURVIVOR_RESCUED", loc_str)
+                    logged_rescues.add(civ_id)
         
         # Show pending rescue requests
         if coord_info['pending_requests']:
