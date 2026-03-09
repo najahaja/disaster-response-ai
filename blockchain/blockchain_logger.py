@@ -82,6 +82,17 @@ class BlockchainLogger:
         except Exception as e:
             print(f"[Blockchain Error] Failed to log event: {e}")
 
+    def get_agent_balance(self, agent_id):
+        """Fetches the RescueToken balance for a specific agent."""
+        if not self.contract:
+            return 0
+            
+        try:
+            return self.contract.functions.getAgentBalance(agent_id).call()
+        except Exception as e:
+            print(f"[Blockchain Error] Failed to get balance for {agent_id}: {e}")
+            return 0
+
     def get_total_logs(self):
         """Fetches the total number of events logged so far."""
         return self.contract.functions.getLogsCount().call()

@@ -781,6 +781,30 @@ class DisasterResponseDashboard:
         """Render the Web3 Blockchain Logs directly on the dashboard"""
         st.subheader("🔗 Immutable Blockchain Audit Trail")
         st.info("These logs represent real Smart Contract transactions on your Ganache node.")
+        
+        # --- Level 2: Token Economy Display ---
+        st.divider()
+        st.subheader("💰 Automated Bounties & Economy")
+        cols = st.columns(2)
+        with cols[0]:
+            st.metric("Discovered Survivor Bounty", "5 RescueTokens")
+        with cols[1]:
+            st.metric("Rescued Survivor Bounty", "15 RescueTokens")
+            
+        if st.session_state.get('blockchain_logger'):
+            # Fetch balances dynamically from Smart Contract
+            drone_bal = st.session_state.blockchain_logger.get_agent_balance("Drone")
+            amb_bal = st.session_state.blockchain_logger.get_agent_balance("Ambulance")
+            team_bal = st.session_state.blockchain_logger.get_agent_balance("Rescue Team")
+            
+            b_cols = st.columns(3)
+            b_cols[0].info(f"**Drone Wallet:**\n\n### {drone_bal} Tokens")
+            b_cols[1].success(f"**Ambulance Wallet:**\n\n### {amb_bal} Tokens")
+            b_cols[2].warning(f"**Rescue Team Wallet:**\n\n### {team_bal} Tokens")
+            
+        st.divider()
+        st.subheader("Live Event Audit")
+        
         history = st.session_state.get('blockchain_history', [])
         if not history:
             st.write("No events logged yet. Trigger a disaster and wait for your AI to find civilians!")
@@ -886,10 +910,13 @@ class DisasterResponseDashboard:
                             
                         # Rescued
                         if c.get('rescued', False) and civ_id not in st.session_state.logged_rescues:
+                            # If trapped in a building, the Rescue Team got them. Else, the Ambulance.
+                            rescuer = "Rescue Team" if c.get('trapped_in_building', False) else "Ambulance"
+                            
                             threading.Thread(target=st.session_state.blockchain_logger.log_event, 
-                                             args=("Ambulance", "SURVIVOR_RESCUED", loc_str)).start()
+                                             args=(rescuer, "SURVIVOR_RESCUED", loc_str)).start()
                             st.session_state.logged_rescues.add(civ_id)
-                            st.session_state.blockchain_history.append(f"[{datetime.now().strftime('%H:%M:%S')}] [Action: SURVIVOR_RESCUED] Agent: Ambulance Location: {loc_str}")
+                            st.session_state.blockchain_history.append(f"[{datetime.now().strftime('%H:%M:%S')}] [Action: SURVIVOR_RESCUED] Agent: {rescuer} Location: {loc_str}")
                             st.session_state["blockchain_history"] = st.session_state.blockchain_history[:]
                 except Exception as e:
                     print(f"Blockchain logging error: {e}")

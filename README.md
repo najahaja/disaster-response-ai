@@ -75,6 +75,11 @@ This FYP explores the application of deep reinforcement learning in emergency re
 - **Communication Hub**: Agent-to-agent message passing
 - **Reward Shaping**: Custom reward functions for rescue optimization
 
+### 🔗 Blockchain Audit & Economy (Web3)
+
+- **Immutable Audit Trail:** Logs all critical AI activities (civilian discoveries and rescues) mapping to a true Smart Contract.
+- **Automated AI Bounties:** A trustless economy directly on the blockchain. The Smart Contract automatically transfers digital token rewards (RescueTokens) to the specific digital wallets of the Drone, Ambulance, or Rescue Team agents upon verified mission success.
+
 ### 📊 Interactive Dashboard
 
 - **Role-Based Access**: Admin and Viewer modes
