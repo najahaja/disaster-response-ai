@@ -17,6 +17,8 @@ import random
 import json
 import zipfile
 from pathlib import Path
+<<<<<<< Updated upstream
+
 # Add project root and subdirectories to path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
@@ -33,6 +35,310 @@ from training.ppo_model import PPOModel
 from training.qmix_model import QMIXModel
 from training.replay_buffer import ReplayBuffer
 from training.config_loader import ConfigLoader
+
+=======
+# ========== PATH SETUP ==========
+# Determine current directory and project root
+try:
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+except NameError:
+    current_dir = os.getcwd()
+
+# Project root is the parent of the training directory
+project_root = os.path.dirname(current_dir)
+
+# Add important directories to path
+if current_dir not in sys.path:
+    sys.path.append(current_dir)
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
+print(f"Current directory: {current_dir}")
+print(f"Project root added to path: {project_root}")
+
+# Keep only the real imports:
+try:
+    from training.ppo_model import PPOModel
+    from training.qmix_model import QMIXModel
+except ImportError:
+    # Fallback if the above fails (e.g. if run from within training dir without root in path)
+    from ppo_model import PPOModel
+    from qmix_model import QMIXModel
+
+# ========== COLAB-SPECIFIC SETUP ==========
+# Check if running in Colab
+IN_COLAB = 'google.colab' in sys.modules
+
+if IN_COLAB:
+    print("Detected Google Colab environment")
+    # Mount Google Drive if needed
+    from google.colab import drive
+    drive.mount('/content/drive', force_remount=True)
+    
+    # Set base path for saving models and data
+    BASE_PATH = "/content/drive/MyDrive/disaster-response-ai"
+    
+    # Create directory structure in Colab
+    os.makedirs(BASE_PATH, exist_ok=True)
+    os.chdir(BASE_PATH)
+    print(f"Changed working directory to: {BASE_PATH}")
+    
+    # Add BASE_PATH to path as well
+    if BASE_PATH not in sys.path:
+        sys.path.append(BASE_PATH)
+    
+else:
+    # Local development setup
+    BASE_PATH = project_root if os.path.basename(current_dir) == 'training' else current_dir
+
+# Set device for PyTorch
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
+print(f"CUDA available: {torch.cuda.is_available()}")
+if torch.cuda.is_available():
+    print(f"GPU: {torch.cuda.get_device_name(0)}")
+
+# Add subdirectories to path
+subdirs = ['environments', 'training', 'utils']
+for subdir in subdirs:
+    subdir_path = os.path.join(BASE_PATH, subdir)
+    if os.path.exists(subdir_path):
+        if subdir_path not in sys.path:
+            sys.path.append(subdir_path)
+            print(f"Added to path: {subdir_path}")
+    else:
+        print(f"Directory not found: {subdir_path} - creating it")
+        os.makedirs(subdir_path, exist_ok=True)
+
+# Import with fallback for Colab
+print("\nAttempting to import modules...")
+
+# First, let's check what's available
+available_modules = []
+
+try:
+    # Try to import SimpleGridEnv
+    from environments.simple_grid_env import SimpleGridEnv
+    print("✓ Imported SimpleGridEnv")
+    available_modules.append('SimpleGridEnv')
+except ImportError as e:
+    print(f"✗ Failed to import SimpleGridEnv: {e}")
+    SimpleGridEnv = None
+
+try:
+    # Try to import RealMapEnv
+    from environments.real_map_env import RealMapEnv
+    print("✓ Imported RealMapEnv")
+    available_modules.append('RealMapEnv')
+except ImportError as e:
+    print(f"✗ Failed to import RealMapEnv: {e}")
+    RealMapEnv = None
+
+# For training modules, let's create them if they don't exist
+training_modules_path = os.path.join(BASE_PATH, 'training')
+if not os.path.exists(training_modules_path):
+    print(f"Training directory doesn't exist at {training_modules_path}")
+    os.makedirs(training_modules_path, exist_ok=True)
+
+# Create minimal implementations if modules don't exist
+class SimplePPOModel:
+    """Simple PPO model for testing"""
+    def __init__(self, state_dim, action_dim, **kwargs):
+        self.state_dim = state_dim
+        self.action_dim = action_dim
+        
+        # Policy network
+        self.policy_net = nn.Sequential(
+            nn.Linear(state_dim, 64),
+            nn.ReLU(),
+            nn.Linear(64, 32),
+            nn.ReLU(),
+            nn.Linear(32, action_dim)
+        )
+        
+        # Value network
+        self.value_net = nn.Sequential(
+            nn.Linear(state_dim, 64),
+            nn.ReLU(),
+            nn.Linear(64, 32),
+            nn.ReLU(),
+            nn.Linear(32, 1)
+        )
+        
+        self.optimizer = None
+        
+    def get_action(self, state, deterministic=False):
+        """Get action from policy"""
+        with torch.no_grad():
+            logits = self.policy_net(state)
+            probs = torch.softmax(logits, dim=-1)
+            
+            if deterministic:
+                action = torch.argmax(probs, dim=-1)
+            else:
+                dist = torch.distributions.Categorical(probs)
+                action = dist.sample()
+            
+            log_prob = torch.log(probs.gather(1, action.unsqueeze(1)).squeeze(1))
+            value = self.value_net(state)
+            
+            return action, log_prob, value
+    
+    def update(self, batch, n_epochs=4, batch_size=32):
+        """Simple update method"""
+        return {
+            'policy_loss': 0.01,
+            'value_loss': 0.01,
+            'entropy_loss': 0.001
+        }
+    
+    def state_dict(self):
+        """Get state dict"""
+        return {
+            'policy_net': self.policy_net.state_dict(),
+            'value_net': self.value_net.state_dict()
+        }
+    
+    def load_state_dict(self, state_dict):
+        """Load state dict"""
+        if 'policy_net' in state_dict:
+            self.policy_net.load_state_dict(state_dict['policy_net'])
+        if 'value_net' in state_dict:
+            self.value_net.load_state_dict(state_dict['value_net'])
+    
+    def to(self, device):
+        """Move model to device"""
+        self.policy_net = self.policy_net.to(device)
+        self.value_net = self.value_net.to(device)
+        return self
+
+class SimpleQMIXModel:
+    """Simple QMIX model for testing"""
+    def __init__(self, n_agents, obs_dim, action_dim, **kwargs):
+        self.n_agents = n_agents
+        self.obs_dim = obs_dim
+        self.action_dim = action_dim
+        
+        self.q_network = nn.Sequential(
+            nn.Linear(obs_dim, 64),
+            nn.ReLU(),
+            nn.Linear(64, 32),
+            nn.ReLU(),
+            nn.Linear(32, action_dim)
+        )
+        
+        self.optimizer = None
+        
+    def __call__(self, x):
+        """Forward pass"""
+        return self.q_network(x)
+    
+    def get_actions(self, obs, hidden_states=None, training=True):
+        """Get actions"""
+        with torch.no_grad():
+            q_values = self.q_network(obs)
+            actions = torch.argmax(q_values, dim=-1)
+            return actions, hidden_states
+    
+    def state_dict(self):
+        """Get state dict"""
+        return self.q_network.state_dict()
+    
+    def load_state_dict(self, state_dict):
+        """Load state dict"""
+        self.q_network.load_state_dict(state_dict)
+    
+    def to(self, device):
+        """Move model to device"""
+        self.q_network = self.q_network.to(device)
+        return self
+    
+    def parameters(self):
+        """Get parameters"""
+        return self.q_network.parameters()
+
+class SimpleReplayBuffer:
+    """Simple replay buffer"""
+    def __init__(self, capacity=10000, **kwargs):
+        self.capacity = capacity
+        self.buffer = []
+        self.position = 0
+    
+    def push(self, states, actions, rewards, next_states, dones):
+        """Add experience"""
+        experience = (states, actions, rewards, next_states, dones)
+        if len(self.buffer) < self.capacity:
+            self.buffer.append(experience)
+        else:
+            self.buffer[self.position] = experience
+        self.position = (self.position + 1) % self.capacity
+    
+    def sample(self, batch_size):
+        """Sample batch"""
+        if len(self.buffer) < batch_size:
+            return None
+        
+        indices = np.random.randint(0, len(self.buffer), batch_size)
+        batch = [self.buffer[i] for i in indices]
+        
+        states, actions, rewards, next_states, dones = zip(*batch)
+        
+        return {
+            'states': np.array(states),
+            'actions': np.array(actions),
+            'rewards': np.array(rewards),
+            'next_states': np.array(next_states),
+            'dones': np.array(dones)
+        }
+    
+    def __len__(self):
+        return len(self.buffer)
+
+# Create dummy classes if imports fail
+if SimpleGridEnv is None:
+    print("\nCreating dummy SimpleGridEnv for testing...")
+    import gymnasium as gym
+    
+    class SimpleGridEnv:
+        def __init__(self, grid_size=10, n_agents=2, n_goals=2, max_steps=100, **kwargs):
+            self.grid_size = grid_size
+            self.n_agents = n_agents
+            self.n_goals = n_goals
+            self.max_steps = max_steps
+            self.observation_space = gym.spaces.Box(low=0, high=1, shape=(grid_size*grid_size,))
+            self.action_space = gym.spaces.Discrete(4)
+            self.current_step = 0
+            
+        def reset(self):
+            self.current_step = 0
+            state = np.random.rand(self.grid_size * self.grid_size)
+            return state, {"success": False}
+        
+        def step(self, action):
+            self.current_step += 1
+            done = self.current_step >= self.max_steps
+            next_state = np.random.rand(self.grid_size * self.grid_size)
+            reward = np.random.rand() - 0.5  # Random reward between -0.5 and 0.5
+            return next_state, reward, done, False, {"success": False, "collisions": 0}
+        
+        def render(self):
+            print(f"Step: {self.current_step}/{self.max_steps}")
+        
+        def close(self):
+            pass
+
+# Set the models to our simple implementations
+# PPOModel = SimplePPOModel
+# QMIXModel = SimpleQMIXModel
+# ReplayBuffer = SimpleReplayBuffer
+
+# print("\nUsing simplified models for testing:")
+# print("✓ SimplePPOModel")
+# print("✓ SimpleQMIXModel")
+# print("✓ SimpleReplayBuffer")
+
+# ========== MAIN TRAINER CLASS ==========
+>>>>>>> Stashed changes
 class MultiAgentTrainer:
     """Main trainer class that handles both PPO and QMIX training"""
     
@@ -63,10 +369,11 @@ class MultiAgentTrainer:
         # Initialize tensorboard
         self.writer = SummaryWriter(f"runs/{self.config['experiment_name']}")
         
+<<<<<<< Updated upstream
         # Device
-        self.device = torch.device("cuda" if torch.cuda.is_available() and self.config.get('use_gpu', True) else "cpu")
+        self.device = torch.device("cuda" if torch.cuda.is_available() and self.config['use_gpu'] else "cpu")
         print(f"Using device: {self.device}")
-        
+=======
         # For tracking training time
         self.start_time = time.time()
     
@@ -75,6 +382,7 @@ class MultiAgentTrainer:
         return {
             'experiment_name': 'multi_agent_rl',
             'algorithm': 'ppo',
+            'total_episodes': 100000,  # set the desire number of episodes 
             'n_agents': 2,
             'train_grid_size': 10,
             'max_steps_per_episode': 100,
@@ -95,6 +403,7 @@ class MultiAgentTrainer:
             'entropy_coef': 0.08,
             'test_during_training': False  # Disabled for testing
         }
+>>>>>>> Stashed changes
     
     def _set_seeds(self):
         """Set random seeds for reproducibility"""
@@ -523,6 +832,14 @@ class MultiAgentTrainer:
         """Save model in .zip format for deployment"""
         zip_path = f"trained_models/{self.config['experiment_name']}_ep{episode}_score{score:.2f}.zip"
         
+<<<<<<< Updated upstream
+        with zipfile.ZipFile(zip_path, 'w') as zipf:
+            # Save model architecture and weights
+            obs_space = self.train_env.observation_space
+            action_space = self.train_env.action_space
+=======
+        zip_path = os.path.join(model_dir, f"{self.config['experiment_name']}_ep{episode}_score{score:.2f}.zip")
+        
         try:
             with zipfile.ZipFile(zip_path, 'w') as zipf:
                 # Save model info
@@ -539,11 +856,7 @@ class MultiAgentTrainer:
                 
                 # Save model weights
                 model_path = f"temp_model_{episode}.pt"
-                if hasattr(self.model, 'state_dict'):
-                    torch.save(self.model.state_dict(), model_path)
-                elif hasattr(self.model, 'policy_net'):
-                    torch.save(self.model.policy_net.state_dict(), model_path)
-                
+                torch.save(self.model.state_dict(), model_path)
                 zipf.write(model_path, 'model_weights.pt')
                 os.remove(model_path)
                 
@@ -651,13 +964,44 @@ class MultiAgentTrainer:
             print(f"Best score: {self.best_score:.2f}")
             print(f"Average score (last 100): {np.mean(self.scores_window):.2f}")
             print("="*60)
-        except KeyboardInterrupt:
-            print("\nTraining interrupted by user. Saving checkpoint...")
-            self.save_checkpoint(score, ep, is_best=False)
-        except Exception as e:
-            print(f"\nError during training: {e}")
-            import traceback
-            traceback.print_exc()
+>>>>>>> Stashed changes
+            
+            model_info = {
+                'algorithm': self.config['algorithm'],
+                'n_agents': self.config['n_agents'],
+                'obs_dim': list(obs_space.shape) if hasattr(obs_space, 'shape') else obs_space,
+                'action_dim': action_space.n if hasattr(action_space, 'n') else action_space,
+                'episode': episode,
+                'score': score,
+                'timestamp': time.strftime("%Y%m%d-%H%M%S")
+            }
+            
+            # Save model info as JSON
+            with zipf.open('model_info.json', 'w') as f:
+                f.write(json.dumps(model_info, indent=2).encode())
+            
+            # Save model weights
+            model_weights_path = f"temp_model_weights.pt"
+            torch.save(self.model.policy_net.state_dict(), model_weights_path)
+            zipf.write(model_weights_path, 'model_weights.pt')
+            os.remove(model_weights_path)
+            
+            # Save configuration
+            config_str = json.dumps(self.config, indent=2)
+            zipf.writestr('config.json', config_str)
+            
+            # Save training stats if available
+            if hasattr(self, 'scores_window'):
+                stats = {
+                    'mean_score': np.mean(self.scores_window) if self.scores_window else 0,
+                    'max_score': max(self.scores_window) if self.scores_window else 0,
+                    'losses': self.losses[-100:] if self.losses else []
+                }
+                zipf.writestr('training_stats.json', json.dumps(stats, indent=2))
+        
+        print(f"Model saved as ZIP: {zip_path}")
+        return zip_path
+    
     def load_checkpoint(self, checkpoint_path):
         """Load model checkpoint"""
         if os.path.exists(checkpoint_path):
@@ -841,6 +1185,7 @@ def main():
         else:
             print(f"Could not load checkpoint: {args.resume}")
     
+<<<<<<< Updated upstream
     # Test only mode
     if args.test_only:
         test_results = trainer.test_model(n_episodes=20, render=args.render)
@@ -851,6 +1196,10 @@ def main():
         
         trainer.cleanup()
         return
+=======
+    # Run the 100k marathon
+    trainer.train(n_episodes=10000)
+>>>>>>> Stashed changes
     
     # Train
     final_model_path, final_results = trainer.train(n_episodes=args.episodes)
