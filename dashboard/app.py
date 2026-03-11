@@ -865,7 +865,7 @@ class DisasterResponseDashboard:
                     from stable_baselines3 import PPO 
                     st.session_state['ai_model'] = PPO.load("models/disaster_response_model")
                 except Exception as e:
-                    st.warning(f"Could not load AI model: {e}. Using Random Agent.")
+                    # st.warning(f"Could not load AI model: {e}. Using Random Agent.")
                     st.session_state['ai_model'] = None
 
             model = st.session_state['ai_model']
