@@ -782,25 +782,47 @@ class DisasterResponseDashboard:
         st.subheader("🔗 Immutable Blockchain Audit Trail")
         st.info("These logs represent real Smart Contract transactions on your Ganache node.")
         
-        # --- Level 2: Token Economy Display ---
+        # --- Level 2 & 3: Token Economy & Relief Fund Display ---
         st.divider()
-        st.subheader("💰 Automated Bounties & Economy")
-        cols = st.columns(2)
-        with cols[0]:
-            st.metric("Discovered Survivor Bounty", "5 RescueTokens")
-        with cols[1]:
-            st.metric("Rescued Survivor Bounty", "15 RescueTokens")
-            
+        st.subheader("💰 Decentralized DAO & Relief Fund (Level 3)")
+        
         if st.session_state.get('blockchain_logger'):
+            logger = st.session_state.blockchain_logger
+            
+            # Show Total Smart Contract Balance
+            fund_balance = logger.get_fund_balance()
+            st.info(f"🏛️ **Total Relief Fund in Smart Contract**: {fund_balance} ETH")
+            
+            # Allow Admin/users to donate to the smart contract pool
+            col_d1, col_d2 = st.columns([3, 1])
+            with col_d1:
+                donate_amt = st.number_input("Donate ETH to Relief Fund", min_value=1.0, value=5.0, step=1.0)
+            with col_d2:
+                st.write("") # spacer
+                st.write("") # spacer
+                if st.button("Sponsor Fund 💸", use_container_width=True):
+                    logger.donate_to_fund(donate_amt)
+                    st.success(f"Deposited {donate_amt} ETH!")
+                    st.rerun()
+
+            st.markdown("---")
+            st.markdown("#### Bounties & Agent Wallets")
+            
+            cols = st.columns(2)
+            with cols[0]:
+                st.metric("Discovered Survivor Bounty", "0.05 ETH")
+            with cols[1]:
+                st.metric("Rescued Survivor Bounty", "0.15 ETH")
+
             # Fetch balances dynamically from Smart Contract
-            drone_bal = st.session_state.blockchain_logger.get_agent_balance("Drone")
-            amb_bal = st.session_state.blockchain_logger.get_agent_balance("Ambulance")
-            team_bal = st.session_state.blockchain_logger.get_agent_balance("Rescue Team")
+            drone_bal = logger.get_agent_balance("Drone")
+            amb_bal = logger.get_agent_balance("Ambulance")
+            team_bal = logger.get_agent_balance("Rescue Team")
             
             b_cols = st.columns(3)
-            b_cols[0].info(f"**Drone Wallet:**\n\n### {drone_bal} Tokens")
-            b_cols[1].success(f"**Ambulance Wallet:**\n\n### {amb_bal} Tokens")
-            b_cols[2].warning(f"**Rescue Team Wallet:**\n\n### {team_bal} Tokens")
+            b_cols[0].info(f"**Drone Wallet:**\n\n### {drone_bal} ETH")
+            b_cols[1].success(f"**Ambulance Wallet:**\n\n### {amb_bal} ETH")
+            b_cols[2].warning(f"**Rescue Team Wallet:**\n\n### {team_bal} ETH")
             
         st.divider()
         st.subheader("Live Event Audit")
