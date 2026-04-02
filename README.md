@@ -79,7 +79,8 @@ This FYP explores the application of deep reinforcement learning in emergency re
 
 - **Level 1: Immutable Audit Trail:** Logs all critical AI activities (civilian discoveries and rescues) mapping to a true Smart Contract.
 - **Level 2: Automated AI Bounties:** A trustless economy directly on the blockchain. The Smart Contract automatically calculates digital rewards based on algorithms.
-- **Level 3: Decentralized Relief Fund (DAO):** The Smart Contract holds a pooled real ETH fund. It assigns real Ganache/Ethereum digital wallets to the Drones and Ambulances, automatically transferring real digital currency payouts out of the Relief pool to the AI agents instantly upon proven civilian rescue!
+- **Level 3: Decentralized Relief Fund (DAO):** The Smart Contract holds a pooled real ETH fund which can be sponsored dynamically. It assigns real Ganache/Ethereum digital wallets to the Drones and Ambulances, automatically transferring real digital currency payouts out of the Relief pool to the AI agents instantly upon proven civilian rescue!
+- **Strict Role-Based Web3 Integration:** Drones are rigorously programmed to only *discover* civilians (earning Discovery Bounties), alerting Ground Vehicles (Ambulances/Rescue Teams) to navigate to the coordinated locations to execute the physical extraction (earning Rescue Bounties), completely preventing artificial reward farming by a single agent class.
 
 ### 📊 Interactive Dashboard
 
