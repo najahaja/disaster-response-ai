@@ -1,4 +1,5 @@
 import os
+import threading
 from web3 import Web3
 import solcx
 
@@ -11,6 +12,7 @@ except Exception as e:
 
 class BlockchainLogger:
     def __init__(self, rpc_url="http://127.0.0.1:7545"):
+        self.tx_lock = threading.Lock()
         # Connect to Ganache
         self.w3 = Web3(Web3.HTTPProvider(rpc_url))
         if not self.w3.is_connected():
@@ -85,15 +87,16 @@ class BlockchainLogger:
         e.g. log_event("Agent_1", "RESCUE_SURVIVOR", "x:10, y:20")
         """
         try:
-            print(f"[Blockchain] Logging event: {agent_id} -> {action_type} at {location}")
-            # Call the logDisasterEvent function on the smart contract
-            tx_hash = self.contract.functions.logDisasterEvent(
-                agent_id, action_type, location
-            ).transact()
-            
-            # Wait for it to be confirmed on the blockchain
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
-            print(f"[Blockchain] Event mined! Block number: {receipt.blockNumber}")
+            with self.tx_lock:
+                print(f"[Blockchain] Logging event: {agent_id} -> {action_type} at {location}")
+                # Call the logDisasterEvent function on the smart contract
+                tx_hash = self.contract.functions.logDisasterEvent(
+                    agent_id, action_type, location
+                ).transact()
+                
+                # Wait for it to be confirmed on the blockchain
+                receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+                print(f"[Blockchain] Event mined! Block number: {receipt.blockNumber}")
         except Exception as e:
             print(f"[Blockchain Error] Failed to log event: {e}")
 

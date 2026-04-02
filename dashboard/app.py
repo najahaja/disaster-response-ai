@@ -782,9 +782,17 @@ class DisasterResponseDashboard:
         st.subheader("🔗 Immutable Blockchain Audit Trail")
         st.info("These logs represent real Smart Contract transactions on your Ganache node.")
         
+        history = st.session_state.get('blockchain_history', [])
+        if not history:
+            st.write("No events logged yet. Trigger a disaster and wait for your AI to find civilians!")
+        else:
+            with st.container(height=200):
+                for log in reversed(history):
+                    st.code(log, language="bash")
+                    
         # --- Level 2 & 3: Token Economy & Relief Fund Display ---
         st.divider()
-        st.subheader("💰 Decentralized DAO & Relief Fund (Level 3)")
+        st.subheader("💰 Decentralized Relief Fund")
         
         if st.session_state.get('blockchain_logger'):
             logger = st.session_state.blockchain_logger
@@ -823,16 +831,6 @@ class DisasterResponseDashboard:
             b_cols[0].info(f"**Drone Wallet:**\n\n### {drone_bal} ETH")
             b_cols[1].success(f"**Ambulance Wallet:**\n\n### {amb_bal} ETH")
             b_cols[2].warning(f"**Rescue Team Wallet:**\n\n### {team_bal} ETH")
-            
-        st.divider()
-        st.subheader("Live Event Audit")
-        
-        history = st.session_state.get('blockchain_history', [])
-        if not history:
-            st.write("No events logged yet. Trigger a disaster and wait for your AI to find civilians!")
-        else:
-            for log in reversed(history):
-                st.code(log, language="bash")
                 
     def render_enhanced_simulation_view(self):
         """Render the live simulation (full‑width map + controls below)."""
@@ -855,8 +853,12 @@ class DisasterResponseDashboard:
                 self.simulation_viewer.render(image_placeholder)
 
             except Exception as e:
+                import traceback
                 self.handle_error(f"Visualization error: {e}")
                 st.error("❌ Failed to render simulation view")
+                st.error(str(e))
+                with st.expander("Show Detailed Crash Information"):
+                    st.code(traceback.format_exc(), language="python")
         else:
             st.info("No active simulation. Start one from the sidebar.")
             self.simulation_viewer.render(image_placeholder)

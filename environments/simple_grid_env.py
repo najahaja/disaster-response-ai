@@ -228,6 +228,9 @@ class SimpleGridEnv(gym.Env):
                 action_str = self._decode_action(action)
                 agent.move(action_str, self.grid)
         
+        # Update agent coordination (Drone scouting, etc)
+        self._update_agent_coordination()
+        
         # Check for civilian rescues
         self._check_civilian_rescues()
         # Calculate rewards
@@ -338,6 +341,9 @@ class SimpleGridEnv(gym.Env):
                 )
                 
                 if reported:
+                    # ✅ FIX: Explicitly mark as found so the Dashboard & Blockchain logger can see it! 
+                    civilian['found'] = True
+                    
                     # Broadcast discovery message
                     self.comm_hub.broadcast_message(
                         sender_id=drone.agent_id,

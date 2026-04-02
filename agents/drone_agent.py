@@ -37,6 +37,12 @@ class DroneAgent(BaseAgent):
         """Get all scouted locations"""
         return list(self.scouted_locations)
     
+    def rescue_civilian(self):
+        """
+        Drones cannot rescue civilians. They can only scout and discover them!
+        """
+        return False
+    
     def get_state(self):
         """Return drone-specific state"""
         state = super().get_state()
