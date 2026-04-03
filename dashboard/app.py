@@ -587,6 +587,24 @@ class DisasterResponseDashboard:
                     d_time = st.session_state.simulation_data.get('disaster_time')
                     if d_time:
                         st.error(f"🔥 Disaster Triggered: {d_time.strftime('%H:%M:%S')}")
+
+    def _render_legend_content(self):
+        """Helper to render the Simulation Legend content"""
+        st.markdown("""
+        **🛰️ Active Agents & Targets:**
+        * 🟢 **Rescue Teams**: Specialized ground coordination units.
+        * 🔵 **Drones**: Multi-agent aerial surveillance and mapping.
+        * 🔴 **Ambulances**: Medical transport for rescued civilians.
+        * 🟡 **Civilians**: Targets requiring immediate assistance.
+
+        **🏘️ Environment & Hazards:**
+        * 🟤 **Buildings**: Standard urban structures and housing.
+        * 🔘 **Roads**: Navigable street and transport network.
+        * ⚪ **Hospitals**: Safe zones and medical delivery points.
+        * 🟠 **Collapsed Buildings**: Significant structural failures or damage.
+        * 🛑 **Road Blocks**: Blocked routes or debris-filled paths.
+        """)
+        
     def render_live_metrics(self):
         """Render enhanced live metrics in sidebar"""
         env = st.session_state.environment
@@ -649,22 +667,8 @@ class DisasterResponseDashboard:
         ## 🌟 Welcome to Disaster Response AI Dashboard
         """)
         st.divider()    
-        st.success("""
-        ### 🧭 Simulation Legend:
-        
-        **🛰️ Active Agents & Targets:**
-        * 🟢 **Rescue Teams**: Specialized ground coordination units.
-        * 🔵 **Drones**: Multi-agent aerial surveillance and mapping.
-        * 🔴 **Ambulances**: Medical transport for rescued civilians.
-        * 🟡 **Civilians**: Targets requiring immediate assistance.
-
-        **🏘️ Environment & Hazards:**
-        * 🟤 **Buildings**: Standard urban structures and housing.
-        * 🔘 **Roads**: Navigable street and transport network.
-        * ⚪ **Hospitals**: Safe zones and medical delivery points.
-        * 🟠 **Collapsed Buildings**: Significant structural failures or damage.
-        * 🛑 **Road Blocks**: Blocked routes or debris-filled paths.
-        """)
+        st.success("### 🧭 Simulation Legend:")
+        self._render_legend_content()
         st.divider()    
         st.markdown(""" 
         ### Role Information:
@@ -842,26 +846,22 @@ class DisasterResponseDashboard:
         st.subheader("🎯 Live Simulation View")
         image_placeholder = st.empty()
 
-        if st.session_state.environment:
-            try:
-                env = st.session_state.environment
-                pygame_surface = env.render()
-                if pygame_surface is not None:
-                    self.simulation_viewer.update_frame(pygame_surface)
+        try:
+            env = st.session_state.environment
+            pygame_surface = env.render()
+            if pygame_surface is not None:
+                self.simulation_viewer.update_frame(pygame_surface)
 
-                # Show the latest frame
-                self.simulation_viewer.render(image_placeholder)
-
-            except Exception as e:
-                import traceback
-                self.handle_error(f"Visualization error: {e}")
-                st.error("❌ Failed to render simulation view")
-                st.error(str(e))
-                with st.expander("Show Detailed Crash Information"):
-                    st.code(traceback.format_exc(), language="python")
-        else:
-            st.info("No active simulation. Start one from the sidebar.")
+            # Show the latest frame
             self.simulation_viewer.render(image_placeholder)
+
+        except Exception as e:
+            import traceback
+            self.handle_error(f"Visualization error: {e}")
+            st.error("❌ Failed to render simulation view")
+            st.error(str(e))
+            with st.expander("Show Detailed Crash Information"):
+                st.code(traceback.format_exc(), language="python")
 
         # ---------- CONTROLS & METRICS ----------
         st.divider()
