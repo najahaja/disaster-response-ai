@@ -190,7 +190,7 @@ This FYP explores the application of deep reinforcement learning in emergency re
 ### Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/ShammazFarees/disaster-response-ai.git
+git clone https://github.com/najahaja/disaster-response-ai.git
 cd disaster-response-ai
 ```
 
